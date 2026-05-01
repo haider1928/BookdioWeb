@@ -1,0 +1,64 @@
+.player-panel {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.player-panel.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.player-controls {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto auto 1fr;
+}
+
+.player-button {
+  min-width: 72px;
+}
+
+.seek-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.seek-bar {
+  width: 100%;
+}
+
+.time-display {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.download-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+@media (max-width: 640px) {
+  .player-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .seek-wrap {
+    grid-column: 1 / -1;
+  }
+
+  .time-display {
+    text-align: left;
+  }
+
+  .download-row {
+    justify-content: stretch;
+  }
+
+  .download-row .button-link {
+    width: 100%;
+  }
+}

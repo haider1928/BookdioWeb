@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDF to Audiobook</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/main.css">
+  <link rel="stylesheet" href="/static/css/upload.css">
+  <link rel="stylesheet" href="/static/css/player.css">
+  <script src="/static/js/upload.js" defer></script>
+  <script src="/static/js/voices.js" defer></script>
+  <script src="/static/js/player.js" defer></script>
+  <script src="/static/js/convert.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1>PDF to Audiobook</h1>
+      <p>Turn a PDF into a downloadable MP3 with natural English voices.</p>
+    </header>
+
+    <main class="app-main">
+      <section class="panel" aria-labelledby="uploadTitle">
+        <div id="uploadZone" class="upload-zone" role="button" tabindex="0">
+          <span class="upload-icon" aria-hidden="true"></span>
+          <div>
+            <h2 id="uploadTitle">Drop your PDF here</h2>
+            <p>Click to browse from your computer</p>
+          </div>
+        </div>
+        <input id="fileInput" class="file-input" type="file" accept="application/pdf,.pdf">
+        <div class="upload-meta">
+          <div class="meta-item">
+            <span class="meta-label">Filename</span>
+            <span id="filename" class="meta-value">No file selected</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Pages</span>
+            <span id="pageCount" class="meta-value">-</span>
+          </div>
+        </div>
+        <div id="uploadStatus" class="status" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="settingsTitle">
+        <h2 id="settingsTitle" class="panel-title">Settings</h2>
+        <div class="settings-grid">
+          <div class="field">
+            <label for="voiceSelect">Voice</label>
+            <select id="voiceSelect"></select>
+            <div id="voiceStatus" class="status" aria-live="polite"></div>
+          </div>
+          <div class="field">
+            <div class="speed-row">
+              <label for="speedRange">Speed</label>
+              <span class="speed-pill"><span id="speedLabel">Normal</span> <span id="speedValue">+0%</span></span>
+            </div>
+            <input id="speedRange" type="range" min="-50" max="50" step="5" value="0">
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="convertTitle">
+        <h2 id="convertTitle" class="panel-title">Convert</h2>
+        <button id="convertButton" class="convert-button" type="button" disabled>
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="convertButtonText">Convert to MP3</span>
+        </button>
+        <div id="convertStatus" class="status" aria-live="polite"></div>
+      </section>
+
+      <section id="playerPanel" class="panel player-panel" aria-labelledby="playerTitle" hidden>
+        <h2 id="playerTitle" class="panel-title">Player</h2>
+        <audio id="audioPlayer" preload="metadata"></audio>
+        <div class="player-controls">
+          <button id="playPauseButton" class="player-button" type="button">Play</button>
+          <button id="stopButton" class="player-button" type="button">Stop</button>
+          <div class="seek-wrap">
+            <input id="seekBar" class="seek-bar" type="range" min="0" max="1000" value="0">
+            <div id="timeDisplay" class="time-display">0:00 / 0:00</div>
+          </div>
+        </div>
+        <div class="download-row">
+          <a id="downloadButton" class="button-link">Download MP3</a>
+        </div>
+      </section>
+
+      <details class="panel text-preview">
+        <summary>Extracted text preview</summary>
+        <textarea id="textPreview" readonly aria-label="Extracted PDF text"></textarea>
+      </details>
+    </main>
+  </div>
+</body>
+</html>

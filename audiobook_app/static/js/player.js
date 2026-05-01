@@ -35,6 +35,19 @@
     playerPanel.hidden = true;
   }
 
+  function showAudio(detail, isComplete) {
+    const sourceUrl = `${detail.preview_url}?v=${Date.now()}`;
+    if (!audio.src || isComplete) {
+      audio.src = sourceUrl;
+      audio.load();
+    }
+
+    downloadButton.href = detail.download_url;
+    downloadButton.download = "audiobook.mp3";
+    playerPanel.hidden = false;
+    requestAnimationFrame(() => playerPanel.classList.add("is-visible"));
+  }
+
   playPauseButton.addEventListener("click", async () => {
     if (!audio.src) {
       return;
@@ -70,12 +83,12 @@
     playPauseButton.textContent = "Play";
   });
 
+  window.addEventListener("audiobook:preview-ready", (event) => {
+    showAudio(event.detail, false);
+  });
+
   window.addEventListener("audiobook:ready", (event) => {
-    audio.src = event.detail.download_url;
-    downloadButton.href = event.detail.download_url;
-    downloadButton.download = event.detail.filename;
-    playerPanel.hidden = false;
-    requestAnimationFrame(() => playerPanel.classList.add("is-visible"));
+    showAudio(event.detail, true);
   });
 
   window.addEventListener("audiobook:reset-player", resetPlayer);

@@ -11,7 +11,7 @@ def cleanup_old_outputs(output_folder: Path, expiry_seconds: int) -> int:
     now = time()
     deleted = 0
 
-    for file_path in output_folder.glob("*.mp3"):
+    for file_path in list(output_folder.glob("*.mp3")) + list(output_folder.glob("*.part.mp3")):
         try:
             if file_path.is_file() and now - file_path.stat().st_mtime > expiry_seconds:
                 file_path.unlink()

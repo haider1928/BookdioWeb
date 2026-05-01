@@ -193,6 +193,18 @@ input[type="range"] {
   background: linear-gradient(135deg, #83decc, #ffc979);
 }
 
+.secondary-button {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.chunk-progress {
+  accent-color: var(--color-accent);
+  height: 12px;
+  margin-top: 12px;
+  width: 100%;
+}
+
 .spinner {
   animation: spin 800ms linear infinite;
   border: 2px solid rgb(17 16 15 / 26%);

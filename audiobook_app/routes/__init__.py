@@ -41,12 +41,16 @@ def register_error_handlers(app):
 def register_blueprints(app):
     from routes.convert import convert_bp
     from routes.download import download_bp
+    from routes.preview import preview_bp
+    from routes.status import status_bp
     from routes.upload import upload_bp
     from routes.voices import voices_bp
 
     app.register_blueprint(frontend_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(convert_bp)
+    app.register_blueprint(status_bp)
+    app.register_blueprint(preview_bp)
     app.register_blueprint(voices_bp)
     app.register_blueprint(download_bp)
     register_error_handlers(app)

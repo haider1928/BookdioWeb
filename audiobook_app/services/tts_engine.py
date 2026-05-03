@@ -1,6 +1,4 @@
 import asyncio
-import os
-import time
 from pathlib import Path
 
 import edge_tts
@@ -80,4 +78,5 @@ async def _async_tts_job(job_id: str, chunks: list[str], voice: str, speed: str,
             update_job_fn(job_id, chunks_done=i, preview_ready=True, time_offset_ms=time_offset_ms)
 
     # Finalize VTT
+    rebuild_captions(job_id)
     write_vtt_file(job_id)

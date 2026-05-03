@@ -6,13 +6,13 @@ from spellchecker import SpellChecker
 from config import Config
 
 _LIGATURE_FIXES = {
-    "ï¬\x81": "fi",
-    "ï¬\x82": "fl",
-    "â€™": "'",
-    "â€œ": '"',
-    "â€\x9d": '"',
-    "â€“": "-",
-    "â€”": "-",
+    "\ufb01": "fi",
+    "\ufb02": "fl",
+    "\u2019": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u2013": "-",
+    "\u2014": "-",
 }
 
 
@@ -77,7 +77,6 @@ def _spell_correct_sentence(sentence: str, spell: SpellChecker) -> str:
     sentence_text = " ".join(corrected)
     sentence_text = re.sub(r"\s+([,.;:!?])", r"\1", sentence_text)
     sentence_text = re.sub(r"\s+'", "'", sentence_text)
-
     sentence_text = re.sub(r"([.!?]){2,}", r"\1", sentence_text)
     sentence_text = re.sub(r",\s*,", ", ", sentence_text)
     sentence_text = re.sub(r"\s{2,}", " ", sentence_text).strip()

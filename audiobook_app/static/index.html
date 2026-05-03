@@ -1,100 +1,116 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PDF to Audiobook</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/main.css">
-  <link rel="stylesheet" href="/static/css/upload.css">
-  <link rel="stylesheet" href="/static/css/player.css">
-  <script src="/static/js/upload.js" defer></script>
-  <script src="/static/js/voices.js" defer></script>
-  <script src="/static/js/player.js" defer></script>
-  <script src="/static/js/convert.js" defer></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF to Audiobook | Lyric Video Sync</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/upload.css">
+    <link rel="stylesheet" href="/static/css/player.css">
+    <link rel="stylesheet" href="/static/css/karaoke.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="app-shell">
-    <header class="app-header">
-      <h1>PDF to Audiobook</h1>
-      <p>Turn a PDF into a downloadable MP3 with natural English voices.</p>
-    </header>
+    <div class="container">
+        <header>
+            <h1>PDF to Audiobook</h1>
+            <p class="subtitle">Convert PDFs into continuous narration with synchronized lyric-style captions.</p>
+        </header>
 
-    <main class="app-main">
-      <section class="panel" aria-labelledby="uploadTitle">
-        <div id="uploadZone" class="upload-zone" role="button" tabindex="0">
-          <span class="upload-icon" aria-hidden="true"></span>
-          <div>
-            <h2 id="uploadTitle">Drop your PDF here</h2>
-            <p>Click to browse from your computer</p>
-          </div>
-        </div>
-        <input id="fileInput" class="file-input" type="file" accept="application/pdf,.pdf">
-        <div class="upload-meta">
-          <div class="meta-item">
-            <span class="meta-label">Filename</span>
-            <span id="filename" class="meta-value">No file selected</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Pages</span>
-            <span id="pageCount" class="meta-value">-</span>
-          </div>
-        </div>
-        <div id="uploadStatus" class="status" aria-live="polite"></div>
-      </section>
+        <main>
+            <section class="panel" id="uploadSection">
+                <div class="section-title">
+                    <span>[1]</span> Upload PDF
+                </div>
+                <div class="upload-zone" id="uploadZone">
+                    <span class="upload-icon">PDF</span>
+                    <div class="upload-text">
+                        Drag and drop your PDF here or <b>browse</b>
+                    </div>
+                    <input type="file" id="fileInput" accept="application/pdf">
+                </div>
+                <div id="uploadStatus" class="upload-status"></div>
+                <div id="pageInfo" class="page-info"></div>
+            </section>
 
-      <section class="panel" aria-labelledby="settingsTitle">
-        <h2 id="settingsTitle" class="panel-title">Settings</h2>
-        <div class="settings-grid">
-          <div class="field">
-            <label for="voiceSelect">Voice</label>
-            <select id="voiceSelect"></select>
-            <div id="voiceStatus" class="status" aria-live="polite"></div>
-          </div>
-          <div class="field">
-            <div class="speed-row">
-              <label for="speedRange">Speed</label>
-              <span class="speed-pill"><span id="speedLabel">Normal</span> <span id="speedValue">+0%</span></span>
-            </div>
-            <input id="speedRange" type="range" min="-50" max="50" step="5" value="0">
-          </div>
-        </div>
-      </section>
+            <section class="panel">
+                <div class="section-title">
+                    <span>[2]</span> Settings and Conversion
+                </div>
+                <div class="controls-grid">
+                    <div class="field-group">
+                        <label for="voiceSelect">Voice Narrator</label>
+                        <select id="voiceSelect">
+                            <option value="">Loading voices...</option>
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <div class="speed-label">
+                            <label for="speedRange">Narrator Speed</label>
+                            <span id="speedVal" style="font-weight: bold; color: var(--accent-color);">+0%</span>
+                        </div>
+                        <input type="range" id="speedRange" min="-50" max="50" value="0" step="5">
+                    </div>
+                </div>
 
-      <section class="panel" aria-labelledby="convertTitle">
-        <h2 id="convertTitle" class="panel-title">Convert</h2>
-        <button id="convertButton" class="convert-button" type="button" disabled>
-          <span class="spinner" aria-hidden="true"></span>
-          <span id="convertButtonText">Convert to MP3</span>
-        </button>
-        <progress id="chunkProgress" class="chunk-progress" max="1" value="0" hidden></progress>
-        <button id="retryButton" class="secondary-button" type="button" hidden>Retry</button>
-        <div id="convertStatus" class="status" aria-live="polite"></div>
-      </section>
+                <div style="margin-top: 2rem;">
+                    <button id="convertBtn" class="btn-primary" style="width: 100%;" disabled>
+                        Convert to Audiobook
+                    </button>
+                </div>
 
-      <section id="playerPanel" class="panel player-panel" aria-labelledby="playerTitle" hidden>
-        <h2 id="playerTitle" class="panel-title">Player</h2>
-        <audio id="audioPlayer" preload="metadata"></audio>
-        <div class="player-controls">
-          <button id="playPauseButton" class="player-button" type="button">Play</button>
-          <button id="stopButton" class="player-button" type="button">Stop</button>
-          <div class="seek-wrap">
-            <input id="seekBar" class="seek-bar" type="range" min="0" max="1000" value="0">
-            <div id="timeDisplay" class="time-display">0:00 / 0:00</div>
-          </div>
-        </div>
-        <div class="download-row">
-          <a id="downloadButton" class="button-link">Download MP3</a>
-        </div>
-      </section>
+                <div id="conversionStatus" class="progress-container hidden">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <div id="statusText" style="margin-top: 0.5rem; font-size: 0.875rem; color: #94a3b8;">
+                        Processing: 0 / 0 chunks
+                    </div>
+                </div>
+            </section>
 
-      <details class="panel text-preview">
-        <summary>Extracted text preview</summary>
-        <textarea id="textPreview" readonly aria-label="Extracted PDF text"></textarea>
-      </details>
-    </main>
-  </div>
+            <section id="playerSection" class="panel hidden">
+                <div class="section-title">
+                    <span>[3]</span> Lyric Video Player
+                </div>
+                <div class="player-container">
+                    <div id="karaokePanel" class="karaoke-panel">
+                        <div class="karaoke-line visible" style="color: #475569; font-size: 1.25rem;">
+                            Captions will sync here as audio plays...
+                        </div>
+
+                        <div class="video-controls">
+                            <div class="progress-bar-container" id="progressBarContainer">
+                                <div class="progress-bar-fill" id="progressBarFill"></div>
+                            </div>
+                            <div class="controls-main">
+                                <button id="playPauseBtn" class="control-btn">Play</button>
+                                <span id="timeDisplay" class="time-display">0:00 / 0:00</span>
+                            </div>
+                        </div>
+
+                        <audio id="audioPlayer"></audio>
+                    </div>
+
+                    <div id="downloadOptions" class="download-options hidden">
+                        <button id="downloadAudioBtn" class="btn-secondary btn-download-audio">
+                            Download MP3
+                        </button>
+                        <button id="downloadVideoBtn" class="btn-primary btn-download-video">
+                            Download Video
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/js/upload.js"></script>
+    <script src="/static/js/voices.js"></script>
+    <script src="/static/js/convert.js"></script>
+    <script src="/static/js/karaoke.js"></script>
+    <script src="/static/js/player.js"></script>
 </body>
 </html>

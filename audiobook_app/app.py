@@ -1,23 +1,35 @@
+# Windows Setup Instructions:
+# Python 3.10+
+# cd audiobook_app
+# py -3.10 -m venv .venv
+# .\.venv\Scripts\Activate.ps1
+# pip install -r requirements.txt
+# python app.py
+# Open http://127.0.0.1:5000
+
 from flask import Flask
 from flask_cors import CORS
 
 from config import Config
 from routes import register_blueprints
-from services.cleanup import cleanup_old_outputs, start_cleanup_thread
+from services.cleanup import start_cleanup_thread
 
 
 def create_app() -> Flask:
-    Config.OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
-
     app = Flask(
         __name__,
         static_folder=str(Config.STATIC_FOLDER),
+        static_url_path="/static"
     )
     app.config["MAX_CONTENT_LENGTH"] = Config.MAX_CONTENT_LENGTH
 
+    # Enable CORS globally
     CORS(app)
+
+    # Register all routes
     register_blueprints(app)
-    cleanup_old_outputs(Config.OUTPUT_FOLDER, Config.FILE_EXPIRY_SECONDS)
+
+    # Start background cleanup
     start_cleanup_thread(
         Config.OUTPUT_FOLDER,
         Config.FILE_EXPIRY_SECONDS,

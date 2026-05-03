@@ -1,88 +1,72 @@
-(function () {
-  const dropZone = document.getElementById("uploadZone");
-  const fileInput = document.getElementById("fileInput");
-  const filenameEl = document.getElementById("filename");
-  const pageCountEl = document.getElementById("pageCount");
-  const textPreview = document.getElementById("textPreview");
-  const statusEl = document.getElementById("uploadStatus");
+document.addEventListener('DOMContentLoaded', () => {
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const pageInfo = document.getElementById('pageInfo');
+    const convertBtn = document.getElementById('convertBtn');
 
-  function setStatus(message, type) {
-    statusEl.textContent = message;
-    statusEl.classList.toggle("is-error", type === "error");
-    statusEl.classList.toggle("is-success", type === "success");
-  }
+    window.extractedChunks = [];
+    window.cleanScript = '';
 
-  function dispatchUploadComplete(data) {
-    window.dispatchEvent(new CustomEvent("audiobook:upload-complete", { detail: data }));
-  }
+    uploadZone.addEventListener('click', () => fileInput.click());
 
-  async function uploadFile(file) {
-    if (!file) {
-      return;
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+    });
+
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+    });
+
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+            handleFileUpload(e.dataTransfer.files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) {
+            handleFileUpload(fileInput.files[0]);
+        }
+    });
+
+    async function handleFileUpload(file) {
+        if (file.type !== 'application/pdf') {
+            uploadStatus.textContent = 'Please upload a PDF file.';
+            uploadStatus.classList.add('upload-error');
+            return;
+        }
+
+        uploadStatus.textContent = 'Uploading and extracting text...';
+        uploadStatus.classList.remove('upload-error');
+        convertBtn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                window.extractedChunks = result.data.text_chunks;
+                window.cleanScript = result.data.clean_script || '';
+                uploadStatus.textContent = 'Text extracted successfully!';
+                const words = result.data.word_count || 0;
+                pageInfo.textContent = `Pages: ${result.data.page_count} | Words: ${words} | Chunks: ${result.data.text_chunks.length}`;
+                convertBtn.disabled = false;
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            uploadStatus.textContent = `Error: ${error.message}`;
+            uploadStatus.classList.add('upload-error');
+        }
     }
-
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setStatus("Choose a PDF file.", "error");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", file);
-    setStatus("Extracting PDF text...", "");
-    filenameEl.textContent = file.name;
-    pageCountEl.textContent = "-";
-    textPreview.value = "";
-    window.dispatchEvent(new CustomEvent("audiobook:upload-start"));
-
-    try {
-      const response = await fetch("/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const payload = await response.json();
-
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error || "Upload failed.");
-      }
-
-      filenameEl.textContent = payload.data.filename;
-      pageCountEl.textContent = String(payload.data.page_count);
-      textPreview.value = payload.data.text || "";
-      setStatus("PDF text extracted.", "success");
-      dispatchUploadComplete(payload.data);
-    } catch (error) {
-      pageCountEl.textContent = "-";
-      textPreview.value = "";
-      setStatus(error.message || "Upload failed.", "error");
-      dispatchUploadComplete({ text: "" });
-    }
-  }
-
-  dropZone.addEventListener("click", () => fileInput.click());
-
-  dropZone.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      fileInput.click();
-    }
-  });
-
-  dropZone.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    dropZone.classList.add("is-dragging");
-  });
-
-  dropZone.addEventListener("dragleave", () => {
-    dropZone.classList.remove("is-dragging");
-  });
-
-  dropZone.addEventListener("drop", (event) => {
-    event.preventDefault();
-    dropZone.classList.remove("is-dragging");
-    uploadFile(event.dataTransfer.files[0]);
-  });
-
-  fileInput.addEventListener("change", () => {
-    uploadFile(fileInput.files[0]);
-  });
-})();
+});

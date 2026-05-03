@@ -1,157 +1,83 @@
 import asyncio
+import os
+import time
 from pathlib import Path
-from time import time
-from uuid import uuid4
 
 import edge_tts
+from mutagen.mp3 import MP3
 
-VOICE_CACHE = {
-    "fetched_at": 0.0,
-    "voices": [],
-}
-VOICE_CACHE_TTL_SECONDS = 60 * 60
+from config import Config
 
 
-def format_rate(speed) -> str:
-    if speed is None or str(speed).strip() == "":
-        value = 0
-    elif isinstance(speed, str) and speed.strip().endswith("%"):
-        value = float(speed.strip()[:-1])
-    else:
-        value = float(speed)
-
-    if value < -50 or value > 50:
-        raise ValueError("Speed must be between -50 and +50.")
-
-    rounded = int(round(value))
-    sign = "+" if rounded >= 0 else ""
-    return f"{sign}{rounded}%"
+def run_tts_job(job_id: str, chunks: list[str], voice: str, speed: str, update_job_fn, get_job_fn):
+    asyncio.run(_async_tts_job(job_id, chunks, voice, speed, update_job_fn, get_job_fn))
 
 
-def split_text_into_chunks(text: str, words_per_chunk: int) -> list[str]:
-    words = text.split()
-    if not words:
-        return []
+async def _async_tts_job(job_id: str, chunks: list[str], voice: str, speed: str, update_job_fn, get_job_fn):
+    from services.job_manager import append_to_vtt, rebuild_captions, write_vtt_file
 
-    return [
-        " ".join(words[index : index + words_per_chunk])
-        for index in range(0, len(words), words_per_chunk)
-    ]
+    mp3_path = Path(get_job_fn(job_id)["mp3_path"])
+    time_offset_ms = 0
+    
+    # Initialize the MP3 file
+    with open(mp3_path, "wb") as f:
+        pass
 
+    for i, text_chunk in enumerate(chunks, 1):
+        temp_mp3 = Config.OUTPUT_FOLDER / f"{job_id}_temp_{i}.mp3"
+        
+        success = False
+        for attempt in range(Config.TTS_MAX_RETRIES + 1):
+            try:
+                submaker = edge_tts.SubMaker()
+                communicate = edge_tts.Communicate(text_chunk.strip(), voice, rate=speed)
+                
+                with open(temp_mp3, "wb") as f:
+                    async for chunk_data in communicate.stream():
+                        if chunk_data["type"] == "audio":
+                            f.write(chunk_data["data"])
+                        elif chunk_data["type"] in ["WordBoundary", "SentenceBoundary"]:
+                            submaker.feed(chunk_data)
+                
+                # Measure duration
+                audio_info = MP3(temp_mp3)
+                duration_ms = int(audio_info.info.length * 1000)
+                
+                # Process VTT entries
+                new_entries = []
+                for cue in submaker.cues:
+                    # cue.start and cue.end are timedelta objects in edge-tts 7.x
+                    start_ms = time_offset_ms + int(cue.start.total_seconds() * 1000)
+                    end_ms = time_offset_ms + int(cue.end.total_seconds() * 1000)
+                    
+                    new_entries.append({
+                        "word": cue.content,
+                        "startMs": start_ms,
+                        "endMs": end_ms
+                    })
+                
+                append_to_vtt(job_id, new_entries)
+                rebuild_captions(job_id)
+                
+                # Append to main MP3
+                with open(temp_mp3, "rb") as source, open(mp3_path, "ab") as dest:
+                    dest.write(source.read())
+                
+                time_offset_ms += duration_ms
+                success = True
+                break
+            except Exception as e:
+                print(f"Error in chunk {i}, attempt {attempt}: {e}")
+                if attempt < Config.TTS_MAX_RETRIES:
+                    await asyncio.sleep(1)
+                else:
+                    raise e
+            finally:
+                if temp_mp3.exists():
+                    temp_mp3.unlink()
 
-async def list_english_voices() -> list[dict]:
-    voices = await edge_tts.list_voices()
-    english_voices = []
+        if success:
+            update_job_fn(job_id, chunks_done=i, preview_ready=True, time_offset_ms=time_offset_ms)
 
-    for voice in voices:
-        locale = str(voice.get("Locale", ""))
-        short_name = voice.get("ShortName")
-        if not locale.lower().startswith("en-") or not short_name:
-            continue
-
-        english_voices.append(
-            {
-                "short_name": short_name,
-                "gender": voice.get("Gender", "Neutral"),
-                "name": voice.get("FriendlyName") or short_name,
-                "locale": locale,
-            }
-        )
-
-    english_voices.sort(key=lambda item: (item["gender"], item["locale"], item["name"]))
-    return english_voices
-
-
-async def get_english_voices(force_refresh: bool = False) -> list[dict]:
-    now = time()
-    cached_voices = VOICE_CACHE["voices"]
-    fetched_at = VOICE_CACHE["fetched_at"]
-
-    if cached_voices and not force_refresh and now - fetched_at < VOICE_CACHE_TTL_SECONDS:
-        return cached_voices
-
-    voices = await list_english_voices()
-    VOICE_CACHE["voices"] = voices
-    VOICE_CACHE["fetched_at"] = now
-    return voices
-
-
-def get_english_voices_sync(force_refresh: bool = False) -> list[dict]:
-    return asyncio.run(get_english_voices(force_refresh=force_refresh))
-
-
-def validate_voice(short_name: str, voices: list[dict]) -> bool:
-    return short_name in {voice["short_name"] for voice in voices}
-
-
-async def convert_text_to_mp3(text: str, voice: str, speed, output_folder: Path) -> dict:
-    rate = format_rate(speed)
-    filename = f"{uuid4().hex}.mp3"
-    output_path = output_folder / filename
-
-    await save_chunk_with_retries(text, voice, rate, output_path)
-
-    return {
-        "filename": filename,
-        "path": output_path,
-        "voice": voice,
-        "speed": rate,
-    }
-
-
-def convert_text_to_mp3_sync(text: str, voice: str, speed, output_folder: Path) -> dict:
-    return asyncio.run(convert_text_to_mp3(text, voice, speed, output_folder))
-
-
-async def save_chunk_once(text: str, voice: str, rate: str, output_path: Path) -> None:
-    communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate)
-    await communicate.save(str(output_path))
-
-
-async def save_chunk_with_retries(
-    text: str,
-    voice: str,
-    rate: str,
-    output_path: Path,
-    timeout_seconds: int = 30,
-    max_retries: int = 2,
-) -> None:
-    last_error = None
-
-    for attempt in range(max_retries + 1):
-        try:
-            if output_path.exists():
-                output_path.unlink()
-            await asyncio.wait_for(
-                save_chunk_once(text, voice, rate, output_path),
-                timeout=timeout_seconds,
-            )
-            return
-        except Exception as exc:
-            last_error = exc
-            if output_path.exists():
-                output_path.unlink()
-            if attempt < max_retries:
-                await asyncio.sleep(1)
-
-    raise RuntimeError("EdgeTTS connection failed. Check internet connection or try again.") from last_error
-
-
-def save_chunk_with_retries_sync(
-    text: str,
-    voice: str,
-    rate: str,
-    output_path: Path,
-    timeout_seconds: int = 30,
-    max_retries: int = 2,
-) -> None:
-    asyncio.run(
-        save_chunk_with_retries(
-            text,
-            voice,
-            rate,
-            output_path,
-            timeout_seconds=timeout_seconds,
-            max_retries=max_retries,
-        )
-    )
+    # Finalize VTT
+    write_vtt_file(job_id)

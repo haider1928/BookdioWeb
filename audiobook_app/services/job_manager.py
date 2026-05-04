@@ -1,49 +1,59 @@
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
-from threading import Lock, Thread
-from time import time
 from uuid import uuid4
 
 from config import Config
-from services.tts_engine import format_rate, save_chunk_with_retries_sync, split_text_into_chunks
+from services.captioning import build_caption_lines, write_line_vtt, write_word_vtt
+from services.tts_engine import run_tts_job
 
+# In-memory job store
 _jobs: dict[str, dict] = {}
-_jobs_lock = Lock()
+_jobs_lock = threading.Lock()
 
 
-def create_job(text: str, voice: str, speed) -> dict:
-    chunks = split_text_into_chunks(text, Config.TTS_CHUNK_WORDS)
-    if not chunks:
-        raise ValueError("Text content is required.")
-
-    job_id = uuid4().hex
-    rate = format_rate(speed)
-    output_path = Config.OUTPUT_FOLDER / f"{job_id}.mp3"
-    output_path.touch()
+def create_job(text_chunks: list[str], voice: str, speed: str) -> dict:
+    job_id = str(uuid4().hex)
+    mp3_path = Config.OUTPUT_FOLDER / f"{job_id}.mp3"
+    word_vtt_path = Config.OUTPUT_FOLDER / f"{job_id}.words.vtt"
+    line_vtt_path = Config.OUTPUT_FOLDER / f"{job_id}.vtt"
 
     job = {
         "job_id": job_id,
-        "status": "queued",
-        "voice": voice,
-        "speed": rate,
-        "chunks": chunks,
+        "status": "pending",
         "chunks_done": 0,
-        "chunks_total": len(chunks),
+        "chunks_total": len(text_chunks),
         "preview_ready": False,
-        "error": "",
-        "output_path": output_path,
-        "created_at": time(),
-        "updated_at": time(),
+        "vtt_ready": False,
+        "captions_ready": False,
+        "vtt_entries": [],  # list of {word, startMs, endMs}
+        "captions": [],  # list of {index, text, startMs, endMs, words}
+        "word_vtt_path": str(word_vtt_path),
+        "vtt_path": str(line_vtt_path),
+        "mp3_path": str(mp3_path),
+        "time_offset_ms": 0,
+        "video_status": "idle",
+        "video_progress": 0,
+        "video_render_version": Config.VIDEO_RENDER_VERSION,
+        "video_error": None,
+        "error": None,
+        "created_at": time.time(),
     }
 
     with _jobs_lock:
         _jobs[job_id] = job
 
-    worker = Thread(target=_process_job, args=(job_id,), name=f"audiobook-job-{job_id}", daemon=True)
-    worker.start()
+    # Start background processing
+    thread = threading.Thread(
+        target=_process_job,
+        args=(job_id, text_chunks, voice, speed),
+        daemon=True
+    )
+    thread.start()
 
-    return get_job(job_id)
+    return _public_job_info(job)
 
 
 def get_job(job_id: str) -> dict | None:
@@ -51,95 +61,79 @@ def get_job(job_id: str) -> dict | None:
         job = _jobs.get(job_id)
         if not job:
             return None
-        return _public_job(job)
+        return _public_job_info(job)
 
 
-def get_job_output_path(job_id: str) -> Path | None:
+def get_full_job_data(job_id: str) -> dict | None:
     with _jobs_lock:
-        job = _jobs.get(job_id)
-        if not job:
-            return None
-        return job["output_path"]
+        return _jobs.get(job_id)
 
 
-def is_job_finished(job_id: str) -> bool:
+def update_job(job_id: str, **kwargs):
     with _jobs_lock:
-        job = _jobs.get(job_id)
-        if not job:
-            return True
-        return job["status"] in {"complete", "error"}
+        if job_id in _jobs:
+            _jobs[job_id].update(kwargs)
 
 
-def mark_job_error(job_id: str, message: str) -> None:
-    _update_job(job_id, status="error", error=message)
-
-
-def _public_job(job: dict) -> dict:
+def _public_job_info(job: dict) -> dict:
     return {
         "job_id": job["job_id"],
         "status": job["status"],
         "chunks_done": job["chunks_done"],
         "chunks_total": job["chunks_total"],
         "preview_ready": job["preview_ready"],
+        "vtt_ready": job["vtt_ready"],
+        "captions_ready": job["captions_ready"],
+        "video_status": job.get("video_status", "idle"),
+        "video_progress": job.get("video_progress", 0),
+        "video_error": job.get("video_error"),
         "error": job["error"],
-        "voice": job["voice"],
-        "speed": job["speed"],
     }
 
 
-def _update_job(job_id: str, **changes) -> None:
-    with _jobs_lock:
-        job = _jobs.get(job_id)
-        if not job:
-            return
-        job.update(changes)
-        job["updated_at"] = time()
-
-
-def _append_file(source_path: Path, destination_path: Path) -> None:
-    with source_path.open("rb") as source, destination_path.open("ab") as destination:
-        while True:
-            data = source.read(1024 * 128)
-            if not data:
-                break
-            destination.write(data)
-        destination.flush()
-
-
-def _process_job(job_id: str) -> None:
-    with _jobs_lock:
-        job = _jobs.get(job_id)
-        if not job:
-            return
-        chunks = list(job["chunks"])
-        voice = job["voice"]
-        rate = job["speed"]
-        output_path = job["output_path"]
-
-    _update_job(job_id, status="processing")
-
+def _process_job(job_id: str, text_chunks: list[str], voice: str, speed: str):
     try:
-        for index, chunk in enumerate(chunks, start=1):
-            temp_path = Config.OUTPUT_FOLDER / f"{job_id}.{index}.part.mp3"
-            save_chunk_with_retries_sync(
-                chunk,
-                voice,
-                rate,
-                temp_path,
-                timeout_seconds=Config.TTS_CHUNK_TIMEOUT_SECONDS,
-                max_retries=Config.TTS_MAX_RETRIES,
-            )
-            _append_file(temp_path, output_path)
-            temp_path.unlink(missing_ok=True)
+        update_job(job_id, status="processing")
+        
+        # Run the actual TTS engine
+        run_tts_job(job_id, text_chunks, voice, speed, update_job, get_full_job_data)
+        
+        update_job(job_id, status="done")
+    except Exception as e:
+        update_job(job_id, status="error", error=str(e))
 
-            preview_ready = index >= min(Config.TTS_PREVIEW_CHUNKS, len(chunks))
-            _update_job(
-                job_id,
-                chunks_done=index,
-                preview_ready=preview_ready,
-                status="processing",
-            )
 
-        _update_job(job_id, status="complete", preview_ready=True, chunks_done=len(chunks))
-    except Exception:
-        mark_job_error(job_id, "EdgeTTS connection failed. Check internet connection or try again.")
+def append_to_vtt(job_id: str, entries: list[dict]):
+    with _jobs_lock:
+        if job_id in _jobs:
+            _jobs[job_id]["vtt_entries"].extend(entries)
+
+
+def rebuild_captions(job_id: str):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if not job:
+            return
+        lines = build_caption_lines(
+            job["vtt_entries"],
+            Config.CAPTION_MIN_WORDS,
+            Config.CAPTION_MAX_WORDS,
+            Config.CAPTION_MAX_GAP_MS,
+        )
+        job["captions"] = lines
+        job["captions_ready"] = len(lines) > 0
+
+
+def write_vtt_file(job_id: str):
+    job = get_full_job_data(job_id)
+    if not job:
+        return
+
+    word_vtt_path = Path(job["word_vtt_path"])
+    line_vtt_path = Path(job["vtt_path"])
+    entries = job["vtt_entries"]
+    lines = job["captions"]
+
+    write_word_vtt(word_vtt_path, entries)
+    write_line_vtt(line_vtt_path, lines)
+    update_job(job_id, vtt_ready=True, captions_ready=len(lines) > 0)

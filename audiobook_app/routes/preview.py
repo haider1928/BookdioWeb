@@ -1,28 +1,26 @@
-from flask import Blueprint, send_file
-
+import os
+from flask import Blueprint, request, Response, send_file
 from routes import error_response
-from services.job_manager import get_job, get_job_output_path
+from services.job_manager import get_full_job_data
 
 preview_bp = Blueprint("preview", __name__)
 
 
-@preview_bp.get("/preview/<job_id>")
-def preview_audio(job_id):
-    job = get_job(job_id)
-    file_path = get_job_output_path(job_id)
-    if not job or not file_path:
-        return error_response("Job not found.", 404)
+@preview_bp.route("/preview/<job_id>", methods=["GET"])
+def preview(job_id):
+    job = get_full_job_data(job_id)
+    if not job:
+        return error_response("Job not found", 404)
+    
+    mp3_path = job["mp3_path"]
+    if not os.path.exists(mp3_path):
+        return error_response("MP3 not ready", 425)
 
-    if not job["preview_ready"] or not file_path.exists() or file_path.stat().st_size == 0:
-        return error_response("Preview audio is not ready yet.", 425)
-
-    response = send_file(
-        file_path,
+    # Support range requests for partial playback
+    # Flask's send_file handles range requests automatically if configured
+    return send_file(
+        mp3_path,
         mimetype="audio/mpeg",
         as_attachment=False,
-        conditional=False,
-        etag=False,
-        max_age=0,
+        conditional=True
     )
-    response.headers["Cache-Control"] = "no-store"
-    return response

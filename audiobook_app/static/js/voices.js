@@ -1,53 +1,124 @@
-(function () {
-  const voiceSelect = document.getElementById("voiceSelect");
-  const statusEl = document.getElementById("voiceStatus");
+document.addEventListener('DOMContentLoaded', () => {
+    const voiceSelect = document.getElementById('voiceSelect');
+    const previewBtn = document.getElementById('previewVoiceBtn');
+    const previewStatus = document.getElementById('previewVoiceStatus');
+    const previewAudio = document.getElementById('voicePreviewAudio');
+    const speedRange = document.getElementById('speedRange');
+    const previewCache = new Map();
+    let currentObjectUrl = null;
 
-  function addOptionGroup(groupName, voices) {
-    if (!voices.length) {
-      return;
+    async function loadVoices() {
+        try {
+            const response = await fetch('/voices');
+            const result = await response.json();
+
+            if (result.success) {
+                voiceSelect.innerHTML = '';
+                
+                for (const [gender, voices] of Object.entries(result.data.voices)) {
+                    if (voices.length === 0) continue;
+                    
+                    const group = document.createElement('optgroup');
+                    group.label = gender;
+                    
+                    voices.forEach(voice => {
+                        const option = document.createElement('option');
+                        option.value = voice.ShortName;
+                        option.textContent = `${voice.FriendlyName} (${voice.Locale})`;
+                        group.appendChild(option);
+                    });
+                    
+                    voiceSelect.appendChild(group);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading voices:', error);
+        }
     }
 
-    const group = document.createElement("optgroup");
-    group.label = groupName;
+    function setPreviewStatus(text, isError = false) {
+        previewStatus.textContent = text;
+        previewStatus.classList.toggle('preview-error', Boolean(isError));
+    }
 
-    voices.forEach((voice) => {
-      const option = document.createElement("option");
-      option.value = voice.short_name;
-      option.textContent = `${voice.name} (${voice.short_name})`;
-      group.appendChild(option);
+    function speedString() {
+        const val = parseInt(speedRange.value, 10);
+        const sign = val >= 0 ? '+' : '';
+        return `${sign}${val}%`;
+    }
+
+    function cacheKey(voice, speed) {
+        return `${voice}|${speed}`;
+    }
+
+    async function generatePreviewAudio(voice, speed) {
+        const response = await fetch('/voices/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voice, speed })
+        });
+
+        if (!response.ok) {
+            let errMessage = `Preview generation failed (${response.status})`;
+            try {
+                const errJson = await response.json();
+                if (errJson && errJson.error) {
+                    errMessage = errJson.error;
+                }
+            } catch (_) {}
+            throw new Error(errMessage);
+        }
+
+        const blob = await response.blob();
+        if (!blob || blob.size === 0) {
+            throw new Error('Empty preview audio response');
+        }
+        return URL.createObjectURL(blob);
+    }
+
+    previewBtn.addEventListener('click', async () => {
+        const voice = voiceSelect.value;
+        if (!voice) {
+            setPreviewStatus('Please select a voice first.', true);
+            return;
+        }
+
+        const speed = speedString();
+        const key = cacheKey(voice, speed);
+        previewBtn.disabled = true;
+        setPreviewStatus(`Generating preview for ${voice} at ${speed}...`);
+
+        try {
+            let audioUrl = previewCache.get(key);
+            if (!audioUrl) {
+                audioUrl = await generatePreviewAudio(voice, speed);
+                previewCache.set(key, audioUrl);
+            }
+
+            if (currentObjectUrl && currentObjectUrl !== audioUrl) {
+                previewAudio.pause();
+                previewAudio.currentTime = 0;
+            }
+
+            currentObjectUrl = audioUrl;
+            previewAudio.src = audioUrl;
+            await previewAudio.play();
+            setPreviewStatus(`Playing preview: ${voice} (${speed})`);
+        } catch (error) {
+            setPreviewStatus(error.message, true);
+        } finally {
+            previewBtn.disabled = false;
+        }
     });
 
-    voiceSelect.appendChild(group);
-  }
+    previewAudio.addEventListener('ended', () => {
+        const voice = voiceSelect.value || 'voice';
+        setPreviewStatus(`Preview ended for ${voice}.`);
+    });
 
-  async function loadVoices() {
-    voiceSelect.disabled = true;
-    statusEl.textContent = "Loading voices...";
+    voiceSelect.addEventListener('change', () => {
+        setPreviewStatus('Ready to preview selected voice.');
+    });
 
-    try {
-      const response = await fetch("/voices");
-      const payload = await response.json();
-
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error || "Failed to load voices.");
-      }
-
-      voiceSelect.innerHTML = "";
-      addOptionGroup("Female", payload.data.voices.Female || []);
-      addOptionGroup("Male", payload.data.voices.Male || []);
-      addOptionGroup("Neutral", payload.data.voices.Neutral || []);
-
-      if (!voiceSelect.options.length) {
-        throw new Error("No English voices were returned.");
-      }
-
-      voiceSelect.disabled = false;
-      statusEl.textContent = "";
-    } catch (error) {
-      voiceSelect.innerHTML = "";
-      statusEl.textContent = error.message || "Failed to load voices.";
-    }
-  }
-
-  loadVoices();
-})();
+    loadVoices();
+});

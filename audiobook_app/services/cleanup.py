@@ -10,7 +10,7 @@ def cleanup_old_outputs(folder: Path, expiry_seconds: int):
         return
 
     for file_path in folder.iterdir():
-        if file_path.is_file() and file_path.suffix in [".mp3", ".vtt", ".mp4"]:
+        if file_path.is_file() and file_path.suffix in [".mp3", ".vtt", ".mp4", ".pdf"]:
             file_age = now - file_path.stat().st_mtime
             if file_age > expiry_seconds:
                 try:

@@ -1,6 +1,8 @@
+import os
+from uuid import uuid4
 from flask import Blueprint, request
+from config import Config
 from routes import success_response, error_response
-from services.pdf_extractor import extract_pdf_text
 
 upload_bp = Blueprint("upload", __name__)
 
@@ -16,10 +18,20 @@ def upload():
     
     if file and file.filename.lower().endswith(".pdf"):
         try:
-            pdf_bytes = file.read()
-            result = extract_pdf_text(pdf_bytes)
-            return success_response(result)
+            # Generate a unique ID for the upload
+            upload_id = f"{uuid4().hex}.pdf"
+            save_path = Config.PDF_UPLOADS_FOLDER / upload_id
+            
+            # Save the file with buffered write to avoid memory issues
+            with open(save_path, "wb") as f:
+                while True:
+                    chunk = file.read(8192)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+            
+            return success_response({"upload_id": upload_id})
         except Exception as e:
-            return error_response(str(e))
+            return error_response(f"Upload failed: {str(e)}")
     
     return error_response("Invalid file type. Please upload a PDF.")

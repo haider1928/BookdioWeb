@@ -28,6 +28,45 @@
     color: var(--accent-color);
 }
 
+.range-options {
+    margin-top: 1rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    background-color: rgba(15, 23, 42, 0.35);
+}
+
+.check-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.check-row input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--accent-color);
+}
+
+.page-range-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 0.9rem;
+}
+
+.compact-field input[type="number"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.compact-field input:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 #fileInput {
     display: none;
 }
@@ -46,4 +85,46 @@
     margin-top: 1rem;
     font-size: 0.9rem;
     color: #94a3b8;
+}
+
+.upload-progress {
+    margin-top: 1rem;
+}
+
+.upload-progress-track {
+    width: 100%;
+    height: 8px;
+    background-color: var(--bg-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.upload-progress-fill {
+    height: 100%;
+    width: 0%;
+    background-color: var(--accent-color);
+    border-radius: 4px;
+    transition: width 0.25s ease;
+}
+
+.upload-progress.indeterminate .upload-progress-fill {
+    width: 40%;
+    animation: uploadIndeterminate 1s ease-in-out infinite;
+}
+
+.progress-status {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: #94a3b8;
+}
+
+@keyframes uploadIndeterminate {
+    0% { transform: translateX(-110%); }
+    100% { transform: translateX(260%); }
+}
+
+@media (max-width: 640px) {
+    .page-range-fields {
+        grid-template-columns: 1fr;
+    }
 }

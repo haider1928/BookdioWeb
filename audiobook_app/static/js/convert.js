@@ -11,6 +11,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const downloadOptions = document.getElementById("downloadOptions");
     const downloadAudioBtn = document.getElementById("downloadAudioBtn");
     const downloadVideoBtn = document.getElementById("downloadVideoBtn");
+    const videoProgress = document.getElementById("videoProgress");
+    const videoProgressFill = document.getElementById("videoProgressFill");
+    const videoProgressText = document.getElementById("videoProgressText");
 
     let currentJobId = null;
     let pollInterval = null;
@@ -36,6 +39,7 @@ document.addEventListener("DOMContentLoaded", () => {
         statusText.textContent = "Initializing conversion pipeline...";
         progressFill.style.width = "0%";
         downloadOptions.classList.add("hidden");
+        hideVideoProgress();
         clearVideoPoll();
 
         try {
@@ -119,9 +123,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         downloadVideoBtn.disabled = false;
         downloadVideoBtn.textContent = "Download Video";
+        hideVideoProgress();
         downloadVideoBtn.onclick = async () => {
             downloadVideoBtn.disabled = true;
             downloadVideoBtn.textContent = "Generating video...";
+            setVideoProgress(0, "Preparing lyric video...");
             await requestVideo(jobId);
         };
     }
@@ -134,10 +140,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 throw new Error(result.error);
             }
 
+            const progress = Number(result.data.video_progress || 0);
+            setVideoProgress(progress, "Processing lyric video...");
+
             if (result.data.video_status === "done" && result.data.download_url) {
+                setVideoProgress(100, "Lyric video ready.");
                 window.location.href = result.data.download_url;
                 downloadVideoBtn.disabled = false;
                 downloadVideoBtn.textContent = "Download Video";
+                hideVideoProgressSoon();
                 return;
             }
 
@@ -145,6 +156,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             downloadVideoBtn.disabled = false;
             downloadVideoBtn.textContent = "Download Video";
+            hideVideoProgress();
             alert(`Video export failed: ${error.message}`);
         }
     }
@@ -159,12 +171,25 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
-                const { video_status: videoStatus, video_error: videoError, download_url: downloadUrl } = result.data;
+                const {
+                    video_status: videoStatus,
+                    video_error: videoError,
+                    video_progress: videoProgressValue,
+                    download_url: downloadUrl
+                } = result.data;
+
+                const progress = Number(videoProgressValue || 0);
+                if (videoStatus === "generating") {
+                    setVideoProgress(progress, `Processing lyric video... ${Math.round(progress)}%`);
+                }
+
                 if (videoStatus === "done" && downloadUrl) {
                     clearVideoPoll();
+                    setVideoProgress(100, "Lyric video ready.");
                     downloadVideoBtn.disabled = false;
                     downloadVideoBtn.textContent = "Download Video";
                     window.location.href = downloadUrl;
+                    hideVideoProgressSoon();
                     return;
                 }
 
@@ -172,6 +197,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     clearVideoPoll();
                     downloadVideoBtn.disabled = false;
                     downloadVideoBtn.textContent = "Download Video";
+                    hideVideoProgress();
                     alert(`Video export failed: ${videoError || "Unknown error"}`);
                 }
             } catch (error) {
@@ -185,5 +211,22 @@ document.addEventListener("DOMContentLoaded", () => {
             clearInterval(videoPollInterval);
             videoPollInterval = null;
         }
+    }
+
+    function setVideoProgress(percent, message) {
+        videoProgress.classList.remove("hidden");
+        videoProgress.setAttribute("aria-hidden", "false");
+        videoProgressFill.style.width = `${Math.max(0, Math.min(percent, 100))}%`;
+        videoProgressText.textContent = message;
+    }
+
+    function hideVideoProgress() {
+        videoProgress.classList.add("hidden");
+        videoProgress.setAttribute("aria-hidden", "true");
+        videoProgressFill.style.width = "0%";
+    }
+
+    function hideVideoProgressSoon() {
+        window.setTimeout(hideVideoProgress, 1200);
     }
 });

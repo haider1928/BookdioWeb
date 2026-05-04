@@ -1,5 +1,5 @@
 import re
-
+import time
 import fitz  # PyMuPDF
 from spellchecker import SpellChecker
 
@@ -46,6 +46,8 @@ def _should_skip_spellcheck(token: str) -> bool:
     if len(token) <= 2:
         return True
     if token.isupper():
+        return True
+    if token != token.lower():
         return True
     if any(ch.isdigit() for ch in token):
         return True
@@ -108,21 +110,57 @@ def _build_chunks(sentences: list[str], max_words: int) -> list[str]:
     return chunks
 
 
-def extract_pdf_text(pdf_bytes: bytes) -> dict:
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+def extract_pdf_text(
+    pdf_path: str | Path, 
+    page_start: int | None = None, 
+    page_end: int | None = None,
+    progress_callback: callable | None = None
+) -> dict:
+    start_time = time.time()
+    doc = fitz.open(str(pdf_path))
     page_count = doc.page_count
-    raw_text = "".join(f"{page.get_text()}\n" for page in doc)
-    doc.close()
 
+    if page_count == 0:
+        doc.close()
+        raise ValueError("PDF has no pages.")
+
+    start_page = page_start or 1
+    end_page = page_end or page_count
+    if start_page < 1 or end_page < start_page or start_page > page_count:
+        doc.close()
+        raise ValueError(f"Invalid page range. PDF has {page_count} pages.")
+    end_page = min(end_page, page_count)
+
+    raw_text_parts = []
+    total_pages_to_extract = end_page - start_page + 1
+    
+    for i, page_index in enumerate(range(start_page - 1, end_page)):
+        page_text = doc[page_index].get_text()
+        raw_text_parts.append(f"{page_text}\n")
+        
+        if progress_callback:
+            progress_callback(i + 1, total_pages_to_extract)
+
+    doc.close()
+    raw_text = "".join(raw_text_parts)
+    extract_time = time.time() - start_time
+    print(f"PDF extraction took {extract_time:.2f}s")
+
+    norm_start = time.time()
     normalized_text = normalize_text(raw_text)
     raw_sentences = _split_sentences(normalized_text)
+    norm_time = time.time() - norm_start
+    print(f"Normalization took {norm_time:.2f}s")
 
+    spell_start = time.time()
     spell = SpellChecker()
     corrected_sentences = [
         _spell_correct_sentence(sentence, spell)
         for sentence in raw_sentences
         if sentence.strip()
     ]
+    spell_time = time.time() - spell_start
+    print(f"Spell correction took {spell_time:.2f}s")
 
     clean_script = " ".join(corrected_sentences).strip()
     text_chunks = _build_chunks(corrected_sentences, Config.TTS_CHUNK_WORDS)
@@ -131,5 +169,8 @@ def extract_pdf_text(pdf_bytes: bytes) -> dict:
         "text_chunks": text_chunks,
         "clean_script": clean_script,
         "page_count": page_count,
+        "page_range": {"start": start_page, "end": end_page}
+        if page_start is not None or page_end is not None
+        else None,
         "word_count": len(clean_script.split()) if clean_script else 0,
     }

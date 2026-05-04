@@ -22,6 +22,28 @@ audio {
     gap: 0.5rem;
 }
 
+.voice-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.preview-status {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    line-height: 1.2;
+}
+
+.preview-status.preview-error {
+    color: #fda4af;
+}
+
+.voice-preview-audio {
+    width: 100%;
+    margin-top: 0.25rem;
+}
+
 label {
     font-size: 0.875rem;
     color: #94a3b8;
@@ -78,4 +100,8 @@ select, input[type="range"] {
     display: flex;
     gap: 1rem;
     margin-top: 1.5rem;
+}
+
+.video-progress {
+    margin-top: 1rem;
 }

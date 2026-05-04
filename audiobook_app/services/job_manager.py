@@ -35,6 +35,8 @@ def create_job(text_chunks: list[str], voice: str, speed: str) -> dict:
         "mp3_path": str(mp3_path),
         "time_offset_ms": 0,
         "video_status": "idle",
+        "video_progress": 0,
+        "video_render_version": Config.VIDEO_RENDER_VERSION,
         "video_error": None,
         "error": None,
         "created_at": time.time(),
@@ -83,6 +85,7 @@ def _public_job_info(job: dict) -> dict:
         "vtt_ready": job["vtt_ready"],
         "captions_ready": job["captions_ready"],
         "video_status": job.get("video_status", "idle"),
+        "video_progress": job.get("video_progress", 0),
         "video_error": job.get("video_error"),
         "error": job["error"],
     }

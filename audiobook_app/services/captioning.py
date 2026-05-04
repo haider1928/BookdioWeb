@@ -68,7 +68,7 @@ def build_caption_lines(
 
     if bucket:
         # Merge short tail into previous line where possible.
-        if lines and len(bucket) < min_words:
+        if lines and len(bucket) < min_words and (int(lines[-1]["words"]) + len(bucket) <= max_words):
             merged_text = _join_words(
                 [lines[-1]["text"]] + [entry["word"] for entry in bucket]
             )

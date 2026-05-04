@@ -31,7 +31,29 @@
                     </div>
                     <input type="file" id="fileInput" accept="application/pdf">
                 </div>
+                <div class="range-options">
+                    <label class="check-row" for="usePageRange">
+                        <input type="checkbox" id="usePageRange">
+                        <span>Process a specific PDF page range</span>
+                    </label>
+                    <div class="page-range-fields">
+                        <div class="field-group compact-field">
+                            <label for="pageStart">Start page</label>
+                            <input type="number" id="pageStart" min="1" step="1" disabled>
+                        </div>
+                        <div class="field-group compact-field">
+                            <label for="pageEnd">End page</label>
+                            <input type="number" id="pageEnd" min="1" step="1" disabled>
+                        </div>
+                    </div>
+                </div>
                 <div id="uploadStatus" class="upload-status"></div>
+                <div id="uploadProgress" class="upload-progress hidden" aria-hidden="true">
+                    <div class="upload-progress-track">
+                        <div id="uploadProgressFill" class="upload-progress-fill"></div>
+                    </div>
+                    <div id="uploadProgressText" class="progress-status">Waiting for PDF...</div>
+                </div>
                 <div id="pageInfo" class="page-info"></div>
             </section>
 
@@ -45,6 +67,11 @@
                         <select id="voiceSelect">
                             <option value="">Loading voices...</option>
                         </select>
+                        <div class="voice-preview-row">
+                            <button id="previewVoiceBtn" class="btn-secondary" type="button">Preview Voice</button>
+                            <span id="previewVoiceStatus" class="preview-status">Select a voice to preview.</span>
+                        </div>
+                        <audio id="voicePreviewAudio" class="voice-preview-audio" controls preload="none"></audio>
                     </div>
                     <div class="field-group">
                         <div class="speed-label">
@@ -101,6 +128,12 @@
                         <button id="downloadVideoBtn" class="btn-primary btn-download-video">
                             Download Video
                         </button>
+                    </div>
+                    <div id="videoProgress" class="video-progress hidden" aria-hidden="true">
+                        <div class="progress-bar">
+                            <div id="videoProgressFill" class="progress-fill"></div>
+                        </div>
+                        <div id="videoProgressText" class="progress-status">Preparing lyric video...</div>
                     </div>
                 </div>
             </section>

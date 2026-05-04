@@ -18,6 +18,7 @@ def register_blueprints(app: Flask):
     from routes.preview import preview_bp
     from routes.download import download_bp
     from routes.subtitles import subtitles_bp
+    from routes.extract import extract_bp
 
     app.register_blueprint(upload_bp)
     app.register_blueprint(voices_bp)
@@ -26,6 +27,7 @@ def register_blueprints(app: Flask):
     app.register_blueprint(preview_bp)
     app.register_blueprint(download_bp)
     app.register_blueprint(subtitles_bp)
+    app.register_blueprint(extract_bp)
 
     @app.route("/")
     def index():

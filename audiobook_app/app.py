@@ -35,6 +35,11 @@ def create_app() -> Flask:
         Config.FILE_EXPIRY_SECONDS,
         Config.CLEANUP_INTERVAL_SECONDS,
     )
+    start_cleanup_thread(
+        Config.PDF_UPLOADS_FOLDER,
+        Config.FILE_EXPIRY_SECONDS,
+        Config.CLEANUP_INTERVAL_SECONDS,
+    )
 
     return app
 

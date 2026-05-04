@@ -1,5 +1,7 @@
 import re
 import time
+from pathlib import Path
+from typing import Callable, Any
 import fitz  # PyMuPDF
 from spellchecker import SpellChecker
 
@@ -114,7 +116,7 @@ def extract_pdf_text(
     pdf_path: str | Path, 
     page_start: int | None = None, 
     page_end: int | None = None,
-    progress_callback: callable | None = None
+    progress_callback: Callable | None = None
 ) -> dict:
     start_time = time.time()
     doc = fitz.open(str(pdf_path))

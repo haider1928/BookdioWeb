@@ -160,9 +160,9 @@ def _generate_video(job_id: str):
         draw = ImageDraw.Draw(frame)
 
         center_y = resolution[1] // 2
-        _draw_centered_text(draw, prev_line, center_y - 150, body_font, (133, 147, 170, 95), resolution[0])
+        _draw_centered_text(draw, prev_line, center_y - 240, body_font, (133, 147, 170, 95), resolution[0])
         _draw_centered_text(draw, active_line, center_y, title_font, (255, 255, 255, 255), resolution[0], shadow=True)
-        _draw_centered_text(draw, next_line, center_y + 145, body_font, (185, 198, 216, 200), resolution[0])
+        _draw_centered_text(draw, next_line, center_y + 230, body_font, (185, 198, 216, 200), resolution[0])
 
         return np.array(frame.convert("RGB"))
 
@@ -275,7 +275,7 @@ def _draw_centered_text(
 
     line_boxes = [draw.textbbox((0, 0), line, font=font) for line in wrapped_lines]
     line_heights = [(bbox[3] - bbox[1]) for bbox in line_boxes]
-    line_spacing = max(10, int(sum(line_heights) / max(1, len(line_heights)) * 0.3))
+    line_spacing = max(10, int(sum(line_heights) / max(1, len(line_heights)) * 0.5))
     total_height = sum(line_heights) + line_spacing * (len(line_heights) - 1)
     current_y = center_y - (total_height // 2)
 

@@ -31,7 +31,6 @@ async def _async_tts_job(job_id: str, chunks: list[str], voice: str, speed: str,
                     text_chunk.strip(),
                     voice,
                     rate=speed,
-                    boundary="WordBoundary",
                 )
                 new_entries = []
                 

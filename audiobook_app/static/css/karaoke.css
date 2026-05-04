@@ -26,8 +26,8 @@
     text-align: center;
     font-size: clamp(1.2rem, 2.4vw, 2.45rem);
     color: #4b5563;
-    line-height: 1.35;
-    padding: 1rem 3rem;
+    line-height: 1.5;
+    padding: 1.75rem 3rem;
     width: 100%;
     transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.45s ease, filter 0.45s ease, color 0.45s ease;
     opacity: 0;
@@ -40,7 +40,7 @@
 .karaoke-line.line-past {
     color: #8593aa;
     opacity: 0.3;
-    transform: translateY(-0.75rem) scale(0.96);
+    transform: translateY(-2.25rem) scale(0.96);
     filter: blur(1.5px);
 }
 
@@ -48,7 +48,7 @@
     color: #ffffff;
     opacity: 1;
     filter: blur(0);
-    transform: translateY(0) scale(1.03);
+    transform: translateY(0) scale(1.05);
     font-weight: 700;
     text-shadow: 0 8px 35px rgba(56, 189, 248, 0.25);
 }
@@ -56,14 +56,14 @@
 .karaoke-line.line-next {
     color: #b9c6d8;
     opacity: 0.78;
-    transform: translateY(0.5rem) scale(0.985);
+    transform: translateY(1.75rem) scale(0.985);
     filter: blur(0.6px);
 }
 
 .karaoke-line.line-future {
     color: #526178;
     opacity: 0.08;
-    transform: translateY(1rem) scale(0.95);
+    transform: translateY(3.5rem) scale(0.95);
     filter: blur(4px);
 }
 

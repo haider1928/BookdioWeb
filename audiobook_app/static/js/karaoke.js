@@ -84,7 +84,21 @@ class KaraokePlayer {
             const lineDiv = document.createElement("div");
             lineDiv.className = "karaoke-line";
             lineDiv.id = `line-${lineIdx}`;
-            lineDiv.textContent = line.text;
+            
+            if (line.word_entries && line.word_entries.length > 0) {
+                line.word_entries.forEach((w, wIdx) => {
+                    const span = document.createElement("span");
+                    span.textContent = w.word;
+                    span.id = `word-${lineIdx}-${wIdx}`;
+                    lineDiv.appendChild(span);
+                    if (wIdx < line.word_entries.length - 1) {
+                        lineDiv.appendChild(document.createTextNode(" "));
+                    }
+                });
+            } else {
+                lineDiv.textContent = line.text;
+            }
+            
             scroller.appendChild(lineDiv);
         });
 
@@ -187,14 +201,29 @@ class KaraokePlayer {
         }
 
         const currentMs = this.audio.currentTime * 1000;
-        const activeIdx = this.findActiveLine(currentMs);
-        if (activeIdx === -1) {
+        const activeLineIdx = this.findActiveLine(currentMs);
+        if (activeLineIdx === -1) {
             return;
         }
 
-        if (force || activeIdx !== this.activeLineIndex) {
-            this.activeLineIndex = activeIdx;
-            this.updateLineClasses(activeIdx);
+        if (force || activeLineIdx !== this.activeLineIndex) {
+            this.activeLineIndex = activeLineIdx;
+            this.updateLineClasses(activeLineIdx);
+        }
+
+        // Word-level highlighting
+        const activeLine = this.captions[activeLineIdx];
+        if (activeLine && activeLine.word_entries) {
+            activeLine.word_entries.forEach((w, wIdx) => {
+                const wordEl = document.getElementById(`word-${activeLineIdx}-${wIdx}`);
+                if (wordEl) {
+                    if (currentMs >= w.startMs && currentMs <= w.endMs) {
+                        wordEl.classList.add("word-active");
+                    } else {
+                        wordEl.classList.remove("word-active");
+                    }
+                }
+            });
         }
     }
 
@@ -224,12 +253,12 @@ class KaraokePlayer {
             }
         });
 
-        const activeLine = document.getElementById(`line-${activeIdx}`);
-        if (!activeLine) {
+        const activeLineEl = document.getElementById(`line-${activeIdx}`);
+        if (!activeLineEl) {
             return;
         }
 
-        const offset = activeLine.offsetTop - (this.container.offsetHeight * 0.45);
+        const offset = activeLineEl.offsetTop - (this.container.offsetHeight * 0.45);
         scroller.style.transform = `translate3d(0, ${-offset}px, 0)`;
     }
 

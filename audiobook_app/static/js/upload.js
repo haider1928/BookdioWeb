@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pageInfo = document.getElementById('pageInfo');
     const convertBtn = document.getElementById('convertBtn');
     const useSpellCheck = document.getElementById('useSpellCheck');
+    const useTransformerSpell = document.getElementById('useTransformerSpell');
     const pipelineStages = document.getElementById('pipelineStages');
 
     window.extractedChunks = [];
@@ -82,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
             uploadStatus.textContent = 'Upload complete. Extracting text...';
 
             // PHASE 2: EXTRACTION
-            const extractParams = { upload_id: uploadId, use_spell_check: useSpellCheck.checked };
+            const extractParams = { upload_id: uploadId, use_spell_check: useSpellCheck.checked, use_transformer_spell: useTransformerSpell.checked };
             if (usePageRange.checked) {
                 const startValue = parseInt(pageStart.value, 10);
                 const endValue = parseInt(pageEnd.value, 10);
@@ -101,7 +102,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!extractInitResult.success) throw new Error(extractInitResult.error);
 
             const extractionJobId = extractInitResult.data.job_id;
-            uploadStatus.textContent = `Extracting text${useSpellCheck.checked ? ' (spell check enabled)' : ' (spell check disabled)'}...`;
+            let spellStatus = useSpellCheck.checked ? 'spell check enabled' : 'spell check disabled';
+            if (useSpellCheck.checked && useTransformerSpell.checked) spellStatus += ' + transformer';
+            uploadStatus.textContent = `Extracting text (${spellStatus})...`;
             const extractionResult = await pollExtractionStatus(extractionJobId);
 
             // COMPLETION

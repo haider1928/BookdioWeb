@@ -24,6 +24,7 @@ class Config:
     TTS_CHUNK_TIMEOUT_SECONDS = 30
     TTS_MAX_RETRIES = 2
     SPELL_CHECK_ENABLED = True
+    SPELL_CHECK_TRANSFORMER = False  # Enable transformer-based correction for gibberish
     VIDEO_FPS = 6
     EXTRACTION_CACHE_TTL_SECONDS = 30 * 60  # 30 minutes
 

@@ -478,18 +478,22 @@ def _inverse_color(rgb: tuple[int, int, int]) -> tuple[int, int, int]:
 
 
 def _draw_text_with_glow(draw, x: int, y: int, text: str, font, color: tuple, glow_intensity: int = 8):
-    """Draw text with glow effect using multiple offset shadows."""
-    offsets = [
-        (-2, -2, 30), (0, -2, 40), (2, -2, 30),
-        (-2, 0, 50),                 (2, 0, 50),
-        (-2, 2, 30), (0, 2, 40), (2, 2, 30),
-        (0, 0, 100),  # center (full opacity, last)
-    ]
+    """Draw text with a clean glow effect using blurred outline."""
     r, g, b = color
-    for ox, oy, alpha_pct in offsets:
-        alpha = int(glow_intensity * alpha_pct / 100)
-        for i in range(max(1, alpha)):
-            draw.text((x + ox * i, y + oy * i), text, font=font, fill=(r, g, b, min(255, alpha * 255 // 100)))
+    # Create a soft glow by drawing slightly blurred copies at increasing offsets
+    # Use a subtle approach: draw the text multiple times with low alpha at offset positions
+    glow_color = (r, g, b, glow_intensity * 10)  # Outer glow (low alpha)
+    glow_offsets = [(-2, 0), (2, 0), (0, -2), (0, 2), (-1, -1), (1, -1), (-1, 1), (1, 1)]
+
+    for ox, oy in glow_offsets:
+        draw.text((x + ox, y + oy), text, font=font, fill=glow_color)
+
+    # Inner glow (slightly brighter)
+    inner_glow = (r, g, b, glow_intensity * 18)
+    draw.text((x, y), text, font=font, fill=inner_glow)
+
+    # Main text (full opacity)
+    draw.text((x, y), text, font=font, fill=(r, g, b, 255))
 
 
 def _calculate_word_spacing(font) -> int:

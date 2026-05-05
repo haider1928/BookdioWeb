@@ -61,6 +61,7 @@ def build_caption_lines(
                     "startMs": bucket[0]["startMs"],
                     "endMs": bucket[-1]["endMs"],
                     "text": _join_words([entry["word"] for entry in bucket]),
+                    "word_entries": list(bucket),
                     "words": len(bucket),
                 }
             )
@@ -74,6 +75,7 @@ def build_caption_lines(
             )
             lines[-1]["text"] = merged_text
             lines[-1]["endMs"] = bucket[-1]["endMs"]
+            lines[-1]["word_entries"].extend(bucket)
             lines[-1]["words"] = int(lines[-1]["words"]) + len(bucket)
         else:
             lines.append(
@@ -81,6 +83,7 @@ def build_caption_lines(
                     "startMs": bucket[0]["startMs"],
                     "endMs": bucket[-1]["endMs"],
                     "text": _join_words([entry["word"] for entry in bucket]),
+                    "word_entries": list(bucket),
                     "words": len(bucket),
                 }
             )

@@ -6,6 +6,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const conversionStatus = document.getElementById("conversionStatus");
     const progressFill = document.getElementById("progressFill");
     const statusText = document.getElementById("statusText");
+    const elapsedTime = document.getElementById("elapsedTime");
+    const etaTime = document.getElementById("etaTime");
+    const voiceInfo = document.getElementById("voiceInfo");
     const playerSection = document.getElementById("playerSection");
     const audioPlayer = document.getElementById("audioPlayer");
     const downloadOptions = document.getElementById("downloadOptions");
@@ -24,6 +27,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const sign = value >= 0 ? "+" : "";
         speedVal.textContent = `${sign}${value}%`;
     });
+
+    formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, "0")}`;
+    };
 
     convertBtn.addEventListener("click", async () => {
         if (!window.extractedChunks || window.extractedChunks.length === 0) {
@@ -52,6 +61,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     speed,
                 }),
             });
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Server error ${response.status}: ${text.substring(0, 100)}`);
+            }
             const result = await response.json();
 
             if (!result.success) {
@@ -59,6 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             currentJobId = result.data.job_id;
+            voiceInfo.textContent = `Voice: ${voice}`;
             startPolling(currentJobId);
         } catch (error) {
             statusText.textContent = `Error: ${error.message}`;
@@ -74,6 +88,11 @@ document.addEventListener("DOMContentLoaded", () => {
         pollInterval = setInterval(async () => {
             try {
                 const response = await fetch(`/status/${jobId}`);
+                if (!response.ok) {
+                    const text = await response.text();
+                    console.error(`Status poll error ${response.status}: ${text.substring(0, 100)}`);
+                    return;
+                }
                 const result = await response.json();
                 if (!result.success) {
                     return;
@@ -87,6 +106,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 if (data.status === "processing") {
                     statusText.textContent = `Speech generation: ${data.chunks_done} / ${data.chunks_total} chunks`;
+                    elapsedTime.textContent = `Elapsed: ${formatTime(data.elapsed_seconds || 0)}`;
+                    etaTime.textContent = data.eta_seconds > 0 ? `ETA: ~${formatTime(data.eta_seconds)}` : `ETA: --`;
                 }
 
                 if (data.preview_ready && playerSection.classList.contains("hidden")) {
@@ -102,6 +123,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     statusText.textContent = data.captions_ready
                         ? "Conversion complete. Captions synchronized."
                         : "Conversion complete. Captions finalizing.";
+                    elapsedTime.textContent = `Elapsed: ${formatTime(data.elapsed_seconds || 0)}`;
+                    etaTime.textContent = "ETA: done";
                     convertBtn.disabled = false;
                     downloadOptions.classList.remove("hidden");
                     bindDownloadButtons(jobId);
@@ -133,8 +156,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function requestVideo(jobId) {
+        const styleConfig = window.styleSelector ? window.styleSelector.getConfig() : {};
         try {
-            const response = await fetch(`/download/${jobId}/video`);
+            const response = await fetch(`/download/${jobId}/video`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ style: styleConfig })
+            });
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Server error ${response.status}: ${text.substring(0, 100)}`);
+            }
             const result = await response.json();
             if (!result.success) {
                 throw new Error(result.error);
@@ -166,6 +198,11 @@ document.addEventListener("DOMContentLoaded", () => {
         videoPollInterval = setInterval(async () => {
             try {
                 const response = await fetch(`/download/${jobId}/video/status`);
+                if (!response.ok) {
+                    const text = await response.text();
+                    console.error(`Video status poll error ${response.status}: ${text.substring(0, 100)}`);
+                    return;
+                }
                 const result = await response.json();
                 if (!result.success) {
                     return;

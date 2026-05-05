@@ -40,7 +40,6 @@ async def _synthesize_preview(voice: str, speed: str, text: str) -> bytes:
         text=text,
         voice=voice,
         rate=speed,
-        boundary="SentenceBoundary",
     )
     audio_buffer = bytearray()
     async for chunk in communicate.stream():

@@ -98,3 +98,117 @@ button:disabled {
 .hidden {
     display: none !important;
 }
+
+/* Gradient progress bars */
+.progress-fill.gradient-progress {
+    background: linear-gradient(90deg, var(--accent-color), #818cf8);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.upload-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-color), #818cf8);
+    border-radius: 4px;
+    transition: width 0.25s ease;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.3);
+}
+
+/* Panel hover glow */
+.panel {
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.panel:hover {
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.1);
+    border-color: rgba(56, 189, 248, 0.3);
+}
+
+/* Button improvements */
+.btn-primary {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.btn-primary:hover:not(:disabled)::before {
+    left: 100%;
+}
+
+/* Status badges with glow */
+.status-processing {
+    background-color: rgba(56, 189, 248, 0.2);
+    color: var(--accent-color);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.status-done {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: var(--success-color);
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+}
+
+.status-error {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: var(--danger-color);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+/* Responsive improvements */
+@media (max-width: 640px) {
+    .container {
+        padding: 1rem;
+    }
+    
+    h1 {
+        font-size: 1.8rem;
+    }
+    
+    .panel {
+        padding: 1.25rem;
+    }
+    
+    .style-presets {
+        gap: 0.5rem;
+    }
+    
+    .style-btn {
+        min-width: 70px;
+        padding: 0.75rem 0.5rem;
+    }
+    
+    .custom-style-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Smooth scroll */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Better focus styles */
+button:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+/* Loading animation */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}

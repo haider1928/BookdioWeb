@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const pageEnd = document.getElementById('pageEnd');
     const pageInfo = document.getElementById('pageInfo');
     const convertBtn = document.getElementById('convertBtn');
+    const useSpellCheck = document.getElementById('useSpellCheck');
+    const pipelineStages = document.getElementById('pipelineStages');
 
     window.extractedChunks = [];
     window.cleanScript = '';
@@ -62,12 +64,16 @@ document.addEventListener('DOMContentLoaded', () => {
         pageInfo.textContent = '';
         setUploadProgress(0, 'Uploading... (0%)', false);
         convertBtn.disabled = true;
+        pipelineStages.classList.remove('hidden');
+        updatePipelineStage('upload', 'active');
 
         const formData = new FormData();
         formData.append('file', file);
 
         try {
             // PHASE 1: UPLOAD
+            updatePipelineStage('upload', 'completed');
+            updatePipelineStage('extract', 'active');
             const uploadResult = await uploadPdf(formData);
             if (!uploadResult.success) throw new Error(uploadResult.error);
 
@@ -76,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
             uploadStatus.textContent = 'Upload complete. Extracting text...';
 
             // PHASE 2: EXTRACTION
-            const extractParams = { upload_id: uploadId };
+            const extractParams = { upload_id: uploadId, use_spell_check: useSpellCheck.checked };
             if (usePageRange.checked) {
                 const startValue = parseInt(pageStart.value, 10);
                 const endValue = parseInt(pageEnd.value, 10);
@@ -95,14 +101,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!extractInitResult.success) throw new Error(extractInitResult.error);
 
             const extractionJobId = extractInitResult.data.job_id;
+            uploadStatus.textContent = `Extracting text${useSpellCheck.checked ? ' (spell check enabled)' : ' (spell check disabled)'}...`;
             const extractionResult = await pollExtractionStatus(extractionJobId);
 
             // COMPLETION
+            updatePipelineStage('extract', 'completed');
+            updatePipelineStage('tts', 'active');
             window.extractedChunks = extractionResult.text_chunks;
             window.cleanScript = extractionResult.clean_script || '';
             uploadStatus.textContent = 'Done.';
             setUploadProgress(100, 'Ready.', false);
-            
+
             const words = extractionResult.word_count || 0;
             const pageLabel = extractionResult.page_range
                 ? `Pages: ${extractionResult.page_range.start}-${extractionResult.page_range.end} of ${extractionResult.page_count}`
@@ -114,6 +123,15 @@ document.addEventListener('DOMContentLoaded', () => {
             uploadStatus.textContent = `Error: ${error.message}`;
             uploadStatus.classList.add('upload-error');
             hideUploadProgress();
+            pipelineStages.classList.add('hidden');
+        }
+    }
+
+    function updatePipelineStage(stage, state) {
+        const stageEl = document.getElementById(`stage${stage.charAt(0).toUpperCase() + stage.slice(1)}`);
+        if (stageEl) {
+            stageEl.classList.remove('active', 'completed');
+            if (state) stageEl.classList.add(state);
         }
     }
 
@@ -152,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const response = await fetch(`/extract/status/${jobId}`);
                     const result = await response.json();
-                    
+
                     if (!result.success) {
                         reject(new Error(result.error));
                         return;
@@ -160,19 +178,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const data = result.data;
                     if (data.status === 'done') {
+                        updatePipelineStage('extract', 'completed');
+                        updatePipelineStage('tts', 'active');
                         resolve(data.result);
                     } else if (data.status === 'error') {
                         reject(new Error(data.error));
                     } else {
-                        // Update extraction progress
+                        // Update extraction progress with phase-specific messages
                         const pagesDone = data.pages_done || 0;
                         const pagesTotal = data.pages_total || 0;
-                        const message = pagesTotal > 0 
-                            ? `Extracting text... page ${pagesDone} of ${pagesTotal}`
-                            : 'Initializing extraction...';
+                        let message = 'Initializing extraction...';
+                        if (data.status === 'extracting' && pagesTotal > 0) {
+                            message = `Extracting text - page ${pagesDone} of ${pagesTotal}`;
+                        } else if (data.status === 'spellchecking') {
+                            const spellDone = data.spell_done || 0;
+                            const spellTotal = data.spell_total || 0;
+                            message = spellTotal > 0
+                                ? `Spell checking ${spellDone} / ${spellTotal} sentences...`
+                                : 'Spell checking...';
+                        }
                         const percent = pagesTotal > 0 ? (pagesDone / pagesTotal) * 100 : 0;
                         setUploadProgress(percent, message, pagesTotal === 0);
-                        
+
                         setTimeout(poll, 1000);
                     }
                 } catch (error) {

@@ -9,17 +9,20 @@ extract_bp = Blueprint("extract", __name__)
 def start_extraction():
     data = request.get_json() or {}
     upload_id = data.get("upload_id")
-    
+
     if not upload_id:
         return error_response("Missing upload_id")
-    
+
     file_path = Config.PDF_UPLOADS_FOLDER / upload_id
     if not file_path.exists():
         return error_response("File not found on server")
-        
+
     page_start = data.get("page_start")
     page_end = data.get("page_end")
-    
+    use_spell_check = data.get("use_spell_check", True)
+    if not isinstance(use_spell_check, bool):
+        use_spell_check = str(use_spell_check).lower() == "true"
+
     try:
         if page_start is not None:
             page_start = int(page_start)
@@ -28,7 +31,7 @@ def start_extraction():
     except ValueError:
         return error_response("Invalid page range")
 
-    job_id = create_extraction_job(file_path, page_start, page_end)
+    job_id = create_extraction_job(file_path, page_start, page_end, use_spell_check=use_spell_check)
     return success_response({"job_id": job_id})
 
 @extract_bp.route("/extract/status/<job_id>", methods=["GET"])

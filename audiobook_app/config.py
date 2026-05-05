@@ -19,9 +19,14 @@ class Config:
     CLEANUP_INTERVAL_SECONDS = 10 * 60  # 10 minutes
 
     TTS_CHUNK_WORDS = 500
+    TTS_MAX_CONCURRENT_WORKERS = 3
     TTS_PREVIEW_CHUNKS = 1
     TTS_CHUNK_TIMEOUT_SECONDS = 30
     TTS_MAX_RETRIES = 2
+    SPELL_CHECK_ENABLED = True
+    VIDEO_FPS = 6
+    EXTRACTION_CACHE_TTL_SECONDS = 30 * 60  # 30 minutes
+
     CAPTION_MIN_WORDS = 8
     CAPTION_MAX_WORDS = 10
     CAPTION_MAX_GAP_MS = 900
@@ -38,7 +43,18 @@ class Config:
     VIDEO_FONT_SIZE = 80
     VIDEO_ACTIVE_COLOR = "#FFD700"
     VIDEO_TEXT_COLOR = "white"
-    VIDEO_RENDER_VERSION = "preview-v2"
+    VIDEO_RENDER_VERSION = "preview-v13"
+
+    AVAILABLE_FONTS = [
+        {"label": "Inter", "value": "'Inter', sans-serif", "file": "inter.ttf", "fallback": "arial.ttf"},
+        {"label": "Arial", "value": "Arial, sans-serif", "file": "arial.ttf"},
+        {"label": "Georgia", "value": "Georgia, serif", "file": "georgia.ttf", "fallback": "times.ttf"},
+        {"label": "Courier New", "value": "'Courier New', monospace", "file": "cour.ttf"},
+        {"label": "Verdana", "value": "Verdana, sans-serif", "file": "verdana.ttf", "fallback": "arial.ttf"},
+        {"label": "Trebuchet MS", "value": "'Trebuchet MS', sans-serif", "file": "trebuc.ttf", "fallback": "arial.ttf"},
+        {"label": "Comic Sans MS", "value": "'Comic Sans MS', cursive", "file": "comic.ttf", "fallback": "arial.ttf"},
+        {"label": "Impact", "value": "Impact, sans-serif", "file": "impact.ttf", "fallback": "arial.ttf"},
+    ]
 
     PORT = 5000
     DEBUG = True

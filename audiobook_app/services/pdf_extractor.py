@@ -1,9 +1,13 @@
 import re
 import time
+from pathlib import Path
+from typing import Callable, Any
 import fitz  # PyMuPDF
 from spellchecker import SpellChecker
 
 from config import Config
+
+_spell_checker: SpellChecker | None = None
 
 _LIGATURE_FIXES = {
     "\ufb01": "fi",
@@ -14,6 +18,14 @@ _LIGATURE_FIXES = {
     "\u2013": "-",
     "\u2014": "-",
 }
+
+
+def _get_spell_checker() -> SpellChecker:
+    global _spell_checker
+    if _spell_checker is None:
+        print("[PDF] Initializing SpellChecker dictionary...")
+        _spell_checker = SpellChecker()
+    return _spell_checker
 
 
 def normalize_text(text: str) -> str:
@@ -111,10 +123,12 @@ def _build_chunks(sentences: list[str], max_words: int) -> list[str]:
 
 
 def extract_pdf_text(
-    pdf_path: str | Path, 
-    page_start: int | None = None, 
+    pdf_path: str | Path,
+    page_start: int | None = None,
     page_end: int | None = None,
-    progress_callback: callable | None = None
+    progress_callback: Callable | None = None,
+    spell_progress_callback: Callable | None = None,
+    use_spell_check: bool = Config.SPELL_CHECK_ENABLED
 ) -> dict:
     start_time = time.time()
     doc = fitz.open(str(pdf_path))
@@ -153,14 +167,27 @@ def extract_pdf_text(
     print(f"Normalization took {norm_time:.2f}s")
 
     spell_start = time.time()
-    spell = SpellChecker()
-    corrected_sentences = [
-        _spell_correct_sentence(sentence, spell)
-        for sentence in raw_sentences
-        if sentence.strip()
-    ]
-    spell_time = time.time() - spell_start
-    print(f"Spell correction took {spell_time:.2f}s")
+    corrected_sentences = []
+    total_sentences = len([s for s in raw_sentences if s.strip()])
+    sentences_done = 0
+
+    if use_spell_check and Config.SPELL_CHECK_ENABLED:
+        spell = _get_spell_checker()
+        for sentence in raw_sentences:
+            if not sentence.strip():
+                continue
+            corrected = _spell_correct_sentence(sentence, spell)
+            corrected_sentences.append(corrected)
+            sentences_done += 1
+            if spell_progress_callback:
+                spell_progress_callback(sentences_done, total_sentences)
+        spell_time = time.time() - spell_start
+        print(f"[PDF] Spell check: {sentences_done} sentences in {spell_time:.2f}s")
+    else:
+        print(f"[PDF] Spell check skipped (disabled)")
+        corrected_sentences = [s for s in raw_sentences if s.strip()]
+
+    corrected_sentences = [s for s in corrected_sentences if s.strip()]
 
     clean_script = " ".join(corrected_sentences).strip()
     text_chunks = _build_chunks(corrected_sentences, Config.TTS_CHUNK_WORDS)

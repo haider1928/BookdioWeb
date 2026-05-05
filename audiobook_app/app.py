@@ -48,4 +48,4 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    app.run(port=Config.PORT, debug=Config.DEBUG, use_reloader=False)
+    app.run(port=Config.PORT, debug=Config.DEBUG, use_reloader=True)

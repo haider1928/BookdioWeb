@@ -7,6 +7,9 @@ class KaraokePlayer {
         this.activeLineIndex = -1;
         this.rafId = null;
         this.isCaptionsReady = false;
+        this.layout = containerDiv.dataset.layout || "multi";
+        this.activeStyle = containerDiv.dataset.activeStyle || "color";
+        this.wordHighlight = containerDiv.dataset.wordHighlight !== 'false';
 
         this.handlePlay = this.handlePlay.bind(this);
         this.handlePause = this.handlePause.bind(this);
@@ -84,7 +87,21 @@ class KaraokePlayer {
             const lineDiv = document.createElement("div");
             lineDiv.className = "karaoke-line";
             lineDiv.id = `line-${lineIdx}`;
-            lineDiv.textContent = line.text;
+            
+            if (line.word_entries && line.word_entries.length > 0) {
+                line.word_entries.forEach((w, wIdx) => {
+                    const span = document.createElement("span");
+                    span.textContent = w.word;
+                    span.id = `word-${lineIdx}-${wIdx}`;
+                    lineDiv.appendChild(span);
+                    if (wIdx < line.word_entries.length - 1) {
+                        lineDiv.appendChild(document.createTextNode(" "));
+                    }
+                });
+            } else {
+                lineDiv.textContent = line.text;
+            }
+            
             scroller.appendChild(lineDiv);
         });
 
@@ -186,16 +203,83 @@ class KaraokePlayer {
             return;
         }
 
-        const currentMs = this.audio.currentTime * 1000;
-        const activeIdx = this.findActiveLine(currentMs);
-        if (activeIdx === -1) {
+        // Offset by -150ms to make highlighting appear earlier (speech is ahead of highlight)
+        const currentMs = (this.audio.currentTime * 1000) - 150;
+        const activeLineIdx = this.findActiveLine(currentMs);
+        if (activeLineIdx === -1) {
             return;
         }
 
-        if (force || activeIdx !== this.activeLineIndex) {
-            this.activeLineIndex = activeIdx;
-            this.updateLineClasses(activeIdx);
+        if (force || activeLineIdx !== this.activeLineIndex) {
+            this.activeLineIndex = activeLineIdx;
+            this.updateLineClasses(activeLineIdx);
         }
+
+        // Word-level highlighting based on layout (only if wordHighlight is enabled)
+        if (this.wordHighlight) {
+            const activeLine = this.captions[activeLineIdx];
+            if (activeLine && activeLine.word_entries) {
+                if (this.layout === "typewriter") {
+                    this.syncTypewriter(activeLineIdx, currentMs);
+                } else {
+                    this.syncWordHighlight(activeLineIdx, currentMs);
+                }
+            }
+        }
+    }
+
+    syncTypewriter(activeLineIdx, currentMs) {
+        const activeLine = this.captions[activeLineIdx];
+        if (!activeLine || !activeLine.word_entries) return;
+
+        // Hide non-active lines in typewriter mode
+        this.captions.forEach((line, lineIdx) => {
+            const lineEl = document.getElementById(`line-${lineIdx}`);
+            if (!lineEl) return;
+            if (lineIdx !== activeLineIdx) {
+                lineEl.style.opacity = "0";
+                lineEl.style.display = "none";
+            } else {
+                lineEl.style.display = "";
+            }
+        });
+
+        // Word-level sync for typewriter
+        activeLine.word_entries.forEach((w, wIdx) => {
+            const wordEl = document.getElementById(`word-${activeLineIdx}-${wIdx}`);
+            if (!wordEl) return;
+
+            const isPast = currentMs > w.endMs;
+            const isActive = currentMs >= w.startMs && currentMs <= w.endMs;
+            const isFuture = currentMs < w.startMs;
+
+            if (isPast) {
+                wordEl.style.opacity = "0.6";
+                wordEl.classList.remove("word-active");
+            } else if (isActive) {
+                wordEl.style.opacity = "1";
+                wordEl.classList.add("word-active");
+            } else {
+                wordEl.style.opacity = "0.3";
+                wordEl.classList.remove("word-active");
+            }
+        });
+    }
+
+    syncWordHighlight(activeLineIdx, currentMs) {
+        const activeLine = this.captions[activeLineIdx];
+        if (!activeLine || !activeLine.word_entries) return;
+
+        activeLine.word_entries.forEach((w, wIdx) => {
+            const wordEl = document.getElementById(`word-${activeLineIdx}-${wIdx}`);
+            if (wordEl) {
+                if (currentMs >= w.startMs && currentMs <= w.endMs) {
+                    wordEl.classList.add("word-active");
+                } else {
+                    wordEl.classList.remove("word-active");
+                }
+            }
+        });
     }
 
     updateLineClasses(activeIdx) {
@@ -224,12 +308,12 @@ class KaraokePlayer {
             }
         });
 
-        const activeLine = document.getElementById(`line-${activeIdx}`);
-        if (!activeLine) {
+        const activeLineEl = document.getElementById(`line-${activeIdx}`);
+        if (!activeLineEl) {
             return;
         }
 
-        const offset = activeLine.offsetTop - (this.container.offsetHeight * 0.45);
+        const offset = activeLineEl.offsetTop - (this.container.offsetHeight * 0.45);
         scroller.style.transform = `translate3d(0, ${-offset}px, 0)`;
     }
 

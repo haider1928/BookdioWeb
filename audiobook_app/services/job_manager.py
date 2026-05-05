@@ -38,8 +38,11 @@ def create_job(text_chunks: list[str], voice: str, speed: str) -> dict:
         "video_progress": 0,
         "video_render_version": Config.VIDEO_RENDER_VERSION,
         "video_error": None,
+        "video_style": {},
         "error": None,
         "created_at": time.time(),
+        "started_at": time.time(),
+        "avg_chunk_time_ms": 0,
     }
 
     with _jobs_lock:
@@ -72,10 +75,21 @@ def get_full_job_data(job_id: str) -> dict | None:
 def update_job(job_id: str, **kwargs):
     with _jobs_lock:
         if job_id in _jobs:
-            _jobs[job_id].update(kwargs)
+            job = _jobs[job_id]
+            job.update(kwargs)
+            # Calculate avg chunk time and ETA
+            if "chunks_done" in kwargs and job["chunks_total"] > 0:
+                elapsed = time.time() - job.get("started_at", time.time())
+                done = job["chunks_done"]
+                if done > 0:
+                    job["avg_chunk_time_ms"] = (elapsed / done) * 1000
 
 
 def _public_job_info(job: dict) -> dict:
+    elapsed = time.time() - job.get("started_at", time.time())
+    remaining = job["chunks_total"] - job["chunks_done"]
+    eta_seconds = int((job["avg_chunk_time_ms"] / 1000) * remaining) if job["chunks_done"] > 0 else 0
+
     return {
         "job_id": job["job_id"],
         "status": job["status"],
@@ -88,6 +102,8 @@ def _public_job_info(job: dict) -> dict:
         "video_progress": job.get("video_progress", 0),
         "video_error": job.get("video_error"),
         "error": job["error"],
+        "eta_seconds": eta_seconds,
+        "elapsed_seconds": int(elapsed),
     }
 
 

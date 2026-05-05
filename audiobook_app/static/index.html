@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="/static/css/upload.css">
     <link rel="stylesheet" href="/static/css/player.css">
     <link rel="stylesheet" href="/static/css/karaoke.css">
+    <link rel="stylesheet" href="/static/css/style-selector.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -18,6 +19,25 @@
             <h1>PDF to Audiobook</h1>
             <p class="subtitle">Convert PDFs into continuous narration with synchronized lyric-style captions.</p>
         </header>
+
+        <div id="pipelineStages" class="pipeline-stages hidden">
+            <div class="stage" id="stageUpload">
+                <span class="stage-dot"></span>
+                <span class="stage-label">Upload</span>
+            </div>
+            <div class="stage" id="stageExtract">
+                <span class="stage-dot"></span>
+                <span class="stage-label">Extract</span>
+            </div>
+            <div class="stage" id="stageTTS">
+                <span class="stage-dot"></span>
+                <span class="stage-label">Speech</span>
+            </div>
+            <div class="stage" id="stageDone">
+                <span class="stage-dot"></span>
+                <span class="stage-label">Done</span>
+            </div>
+        </div>
 
         <main>
             <section class="panel" id="uploadSection">
@@ -82,6 +102,13 @@
                     </div>
                 </div>
 
+                <div class="field-group" style="margin-top: 1rem;">
+                    <label class="check-row" for="useSpellCheck">
+                        <input type="checkbox" id="useSpellCheck">
+                        <span>Enable spell check (slower but improves text quality)</span>
+                    </label>
+                </div>
+
                 <div style="margin-top: 2rem;">
                     <button id="convertBtn" class="btn-primary" style="width: 100%;" disabled>
                         Convert to Audiobook
@@ -90,20 +117,118 @@
 
                 <div id="conversionStatus" class="progress-container hidden">
                     <div class="progress-bar">
-                        <div id="progressFill" class="progress-fill"></div>
+                        <div id="progressFill" class="progress-fill gradient-progress"></div>
                     </div>
                     <div id="statusText" style="margin-top: 0.5rem; font-size: 0.875rem; color: #94a3b8;">
                         Processing: 0 / 0 chunks
                     </div>
+                    <div id="conversionMeta" class="conversion-meta">
+                        <span id="elapsedTime">Elapsed: 0s</span>
+                        <span id="etaTime">ETA: --</span>
+                        <span id="voiceInfo">Voice: --</span>
+                    </div>
                 </div>
+            </section>
+
+            <section class="panel" id="styleSection">
+                <div class="section-title">
+                    <span>[3]</span> Lyric Style
+                </div>
+
+                <div class="style-presets">
+                    <button class="style-btn" data-style="spotify" title="Spotify Lyrics">
+                        <span class="style-preview style-spotify"></span>
+                        <span class="style-label">Spotify</span>
+                    </button>
+                    <button class="style-btn" data-style="classic" title="Classic Karaoke">
+                        <span class="style-preview style-classic"></span>
+                        <span class="style-label">Karaoke</span>
+                    </button>
+                    <button class="style-btn" data-style="neon" title="Neon Glow">
+                        <span class="style-preview style-neon"></span>
+                        <span class="style-label">Neon</span>
+                    </button>
+                    <button class="style-btn" data-style="minimal" title="Minimal Clean">
+                        <span class="style-preview style-minimal"></span>
+                        <span class="style-label">Minimal</span>
+                    </button>
+                    <button class="style-btn" data-style="block" title="Highlight Block">
+                        <span class="style-preview style-block"></span>
+                        <span class="style-label">Block</span>
+                    </button>
+                </div>
+
+                <details class="custom-style-section">
+                    <summary>Customize colors & font</summary>
+                    <div class="custom-style-grid">
+                        <div class="field-group">
+                            <label for="bgColorPicker">Background</label>
+                            <div class="color-picker-row">
+                                <input type="color" id="bgColorPicker" value="#020617">
+                                <span id="bgColorHex">#020617</span>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <label for="inactiveColorPicker">Inactive text</label>
+                            <div class="color-picker-row">
+                                <input type="color" id="inactiveColorPicker" value="#4b5563">
+                                <span id="inactiveColorHex">#4b5563</span>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <label for="activeColorPicker">Active highlight</label>
+                            <div class="color-picker-row">
+                                <input type="color" id="activeColorPicker" value="#ffffff">
+                                <span id="activeColorHex">#ffffff</span>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <label for="fontSelect">Font</label>
+                            <select id="fontSelect">
+                                <option value="'Inter', sans-serif">Inter</option>
+                                <option value="Arial, sans-serif">Arial</option>
+                                <option value="Georgia, serif">Georgia</option>
+                                <option value="'Courier New', monospace">Courier New</option>
+                                <option value="Verdana, sans-serif">Verdana</option>
+                                <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label for="activeStyleSelect">Highlight style</label>
+                            <select id="activeStyleSelect">
+                                <option value="color">Color only</option>
+                                <option value="underline">Underline</option>
+                                <option value="glow">Glow</option>
+                                <option value="block">Background block</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label for="layoutSelect">Layout</label>
+                            <select id="layoutSelect">
+                                <option value="multi">Multi-line (3 lines visible)</option>
+                                <option value="single">Single line (Spotify style)</option>
+                                <option value="typewriter">Typewriter (word-by-word)</option>
+                                <option value="center">Center Focus (5 lines)</option>
+                                <option value="banner">Bottom Banner</option>
+                                <option value="full">Full Page (large text)</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label class="check-row" for="wordHighlightCheckbox">
+                                <input type="checkbox" id="wordHighlightCheckbox" checked>
+                                <span>Enable word-level highlighting</span>
+                            </label>
+                        </div>
+                    </div>
+                </details>
             </section>
 
             <section id="playerSection" class="panel hidden">
                 <div class="section-title">
-                    <span>[3]</span> Lyric Video Player
+                    <span>[4]</span> Lyric Video Player
                 </div>
                 <div class="player-container">
-                    <div id="karaokePanel" class="karaoke-panel">
+                    <div id="karaokePanel" class="karaoke-panel" data-active-style="color" data-layout="multi">
                         <div class="karaoke-line visible" style="color: #475569; font-size: 1.25rem;">
                             Captions will sync here as audio plays...
                         </div>
@@ -145,5 +270,6 @@
     <script src="/static/js/convert.js"></script>
     <script src="/static/js/karaoke.js"></script>
     <script src="/static/js/player.js"></script>
+    <script src="/static/js/style-selector.js"></script>
 </body>
 </html>

@@ -19,7 +19,7 @@ class Config:
     CLEANUP_INTERVAL_SECONDS = 10 * 60  # 10 minutes
 
     TTS_CHUNK_WORDS = 500
-    TTS_MAX_CONCURRENT_WORKERS = 3
+    TTS_MAX_CONCURRENT_WORKERS = 6
     TTS_PREVIEW_CHUNKS = 1
     TTS_CHUNK_TIMEOUT_SECONDS = 30
     TTS_MAX_RETRIES = 2
@@ -43,7 +43,7 @@ class Config:
     VIDEO_FONT_SIZE = 80
     VIDEO_ACTIVE_COLOR = "#FFD700"
     VIDEO_TEXT_COLOR = "white"
-    VIDEO_RENDER_VERSION = "preview-v13"
+    VIDEO_RENDER_VERSION = "preview-v14"
 
     AVAILABLE_FONTS = [
         {"label": "Inter", "value": "'Inter', sans-serif", "file": "inter.ttf", "fallback": "arial.ttf"},

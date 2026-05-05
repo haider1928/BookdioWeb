@@ -8,9 +8,13 @@ class StyleSelector {
             activeStyle: "color",
             layout: "multi",
             font: "'Inter', sans-serif",
+            fontSize: 48,  // Default font size in px
             wordHighlight: true,
             isCustom: false
         };
+
+        this.fontSizeRange = document.getElementById("fontSizeRange");
+        this.fontSizeValue = document.getElementById("fontSizeValue");
 
         this.panel = document.getElementById("karaokePanel");
         this.styleBtns = document.querySelectorAll(".style-btn");
@@ -45,6 +49,11 @@ class StyleSelector {
             select.addEventListener("change", () => this.onCustomChange());
         });
 
+        // Font size slider
+        if (this.fontSizeRange) {
+            this.fontSizeRange.addEventListener("input", () => this.onCustomChange());
+        }
+
         // Word highlight checkbox
         if (this.wordHighlightCheckbox) {
             this.wordHighlightCheckbox.addEventListener("change", () => this.onCustomChange());
@@ -61,35 +70,35 @@ class StyleSelector {
                 bg: "#121212", bgStart: "#1e293b",
                 inactiveColor: "#535353", activeColor: "#1DB954",
                 activeStyle: "color", layout: "single",
-                font: "'Inter', sans-serif",
+                font: "'Inter', sans-serif", fontSize: 48,
                 wordHighlight: true
             },
             classic: {
                 bg: "#0a0a0a", bgStart: "#1a1a1a",
                 inactiveColor: "#666666", activeColor: "#FFD700",
                 activeStyle: "underline", layout: "multi",
-                font: "Arial, sans-serif",
+                font: "Arial, sans-serif", fontSize: 56,
                 wordHighlight: true
             },
             neon: {
                 bg: "#000000", bgStart: "#0a0a0a",
                 inactiveColor: "#333333", activeColor: "#00FFFF",
                 activeStyle: "glow", layout: "multi",
-                font: "Arial, sans-serif",
+                font: "Arial, sans-serif", fontSize: 52,
                 wordHighlight: true
             },
             minimal: {
                 bg: "#FFFFFF", bgStart: "#f0f0f0",
                 inactiveColor: "#CCCCCC", activeColor: "#E63946",
                 activeStyle: "color", layout: "single",
-                font: "'Inter', sans-serif",
+                font: "'Inter', sans-serif", fontSize: 44,
                 wordHighlight: true
             },
             block: {
                 bg: "#1a1a2e", bgStart: "#16213e",
                 inactiveColor: "#888888", activeColor: "#FF6B35",
                 activeStyle: "block", layout: "multi",
-                font: "Arial, sans-serif",
+                font: "Arial, sans-serif", fontSize: 50,
                 wordHighlight: true
             }
         };
@@ -114,9 +123,13 @@ class StyleSelector {
             activeStyle: this.activeStyleSelect.value,
             layout: this.layoutSelect.value,
             font: this.fontSelect.value,
+            fontSize: parseInt(this.fontSizeRange.value) || 48,
             wordHighlight: this.wordHighlightCheckbox ? this.wordHighlightCheckbox.checked : true,
             isCustom: true
         };
+        if (this.fontSizeValue) {
+            this.fontSizeValue.textContent = `${this.currentStyle.fontSize}px`;
+        }
         this.applyToPlayer();
         this.clearActiveButton();
         this.updateHexLabels();
@@ -131,6 +144,7 @@ class StyleSelector {
         this.panel.style.setProperty("--karaoke-word-inactive", s.inactiveColor);
         this.panel.style.setProperty("--karaoke-word-active", s.activeColor);
         this.panel.style.setProperty("--karaoke-font", s.font);
+        this.panel.style.setProperty("--karaoke-font-size", `${s.fontSize || 48}px`);
         this.panel.dataset.activeStyle = s.activeStyle;
         this.panel.dataset.layout = s.layout;
         this.panel.dataset.wordHighlight = s.wordHighlight;
@@ -145,6 +159,12 @@ class StyleSelector {
         this.fontSelect.value = s.font;
         this.activeStyleSelect.value = s.activeStyle;
         this.layoutSelect.value = s.layout;
+        if (this.fontSizeRange) {
+            this.fontSizeRange.value = s.fontSize || 48;
+        }
+        if (this.fontSizeValue) {
+            this.fontSizeValue.textContent = `${s.fontSize || 48}px`;
+        }
         if (this.wordHighlightCheckbox) {
             this.wordHighlightCheckbox.checked = s.wordHighlight;
         }
@@ -183,6 +203,10 @@ class StyleSelector {
         // Ensure wordHighlight is included
         if (config.wordHighlight === undefined) {
             config.wordHighlight = true;
+        }
+        // Ensure fontSize is included
+        if (config.fontSize === undefined) {
+            config.fontSize = 48;
         }
         return config;
     }

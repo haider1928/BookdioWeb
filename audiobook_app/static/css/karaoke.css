@@ -33,7 +33,7 @@
 
 .karaoke-line {
     text-align: center;
-    font-size: clamp(1.2rem, 2.8vw, 2.6rem);
+    font-size: var(--karaoke-font-size, clamp(1.2rem, 2.8vw, 2.6rem));
     color: var(--karaoke-inactive);
     line-height: 1.6;
     padding: 1rem 3rem;

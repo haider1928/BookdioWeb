@@ -174,7 +174,7 @@ class KaraokePlayer {
 
         let low = 0;
         let high = this.captions.length - 1;
-        let lastKnown = -1;
+        let lastKnown = 0;
 
         while (low <= high) {
             const mid = Math.floor((low + high) / 2);
@@ -192,10 +192,16 @@ class KaraokePlayer {
             }
         }
 
-        if (lastKnown >= 0) {
-            return Math.min(lastKnown + 1, this.captions.length - 1);
+        // If past all captions, return last index
+        if (currentMs >= this.captions[this.captions.length - 1].endMs) {
+            return this.captions.length - 1;
         }
-        return 0;
+        // If before all captions, return first index
+        if (currentMs <= this.captions[0].startMs) {
+            return 0;
+        }
+        // In a gap - return the caption that just ended
+        return lastKnown;
     }
 
     sync(force = false) {
@@ -203,8 +209,8 @@ class KaraokePlayer {
             return;
         }
 
-        // Offset by -150ms to make highlighting appear earlier (speech is ahead of highlight)
-        const currentMs = (this.audio.currentTime * 1000) - 150;
+        // No offset needed - word timings from edge-tts are already accurate
+        const currentMs = this.audio.currentTime * 1000;
         const activeLineIdx = this.findActiveLine(currentMs);
         if (activeLineIdx === -1) {
             return;

@@ -1,55 +1,61 @@
 # PDF to Audiobook Web App
 
-A Flask web app that extracts text from PDFs with PyMuPDF and converts it to MP3 audiobook audio with EdgeTTS.
+A Flask web app that extracts text from PDFs with PyMuPDF and converts it to MP3 audiobook audio with EdgeTTS. Also supports video generation with karaoke-style text rendering.
 
 ## Features
 
 - Drag and drop PDF upload
-- Clean page-by-page PDF text extraction
+- Clean page-by-page PDF text extraction with unicode normalization
 - Dynamic English voice list from `edge_tts.list_voices()`
 - Voice dropdown grouped by gender
 - Speed control from `-50%` to `+50%`
-- Normal speed bug fixed by always sending `+0%` to EdgeTTS
-- Chunked MP3 generation into `audiobook_app/outputs`
+- Font size slider (24-120px) for video output
+- Font family selector with preview
+- Spell checker with custom corrections + optional AI transformer (DistilBERT) for gibberish words
+- Two-word merge patterns for PDF extraction artifacts (e.g., "the rre" → "There")
+- IPA/ligature character fixes (50+ mappings)
+- Video generation with optimized rendering (font caching, pre-calculation)
+- Clean glow effect for active text in video
+- Preview and download use aligned timing (no sync offset)
+- Chunked MP3/Video generation
 - Real-time preview playback after the first generated chunks
 - Early MP3 download while the file is still being written
 - EdgeTTS timeout and retry handling per chunk
-- Background cleanup for MP3 files older than 1 hour
+- TTS workers: 6 concurrent for faster processing
+- Background cleanup for output files older than 1 hour
 - CORS enabled globally
 
 ## Project Structure
 
 ```text
 audiobook_app/
-|-- app.py
-|-- config.py
-|-- requirements.txt
-|-- routes/
-|   |-- __init__.py
-|   |-- upload.py
-|   |-- convert.py
-|   |-- voices.py
-|   |-- status.py
-|   |-- preview.py
-|   `-- download.py
+|-- app.py              # Flask app entry point
+|-- config.py           # Configuration settings
+|-- requirements.txt    # Python dependencies
+|-- routes/             # API endpoints
+|   |-- upload.py       # PDF upload
+|   |-- extract.py      # Text extraction
+|   |-- convert.py      # TTS/Video conversion
+|   |-- voices.py       # List EdgeTTS voices
+|   |-- status.py       # Job status polling
+|   |-- preview.py      # Audio/Video preview
+|   |-- download.py    # Download final output
+|   |-- subtitles.py   # Subtitle generation
+|   `-- cleanup.py     # File cleanup
 |-- services/
-|   |-- __init__.py
-|   |-- pdf_extractor.py
-|   |-- tts_engine.py
-|   |-- job_manager.py
-|   `-- cleanup.py
-|-- outputs/
-`-- static/
-    |-- css/
-    |   |-- main.css
-    |   |-- player.css
-    |   `-- upload.css
-    |-- js/
-    |   |-- upload.js
-    |   |-- voices.js
-    |   |-- convert.js
-    |   `-- player.js
-    `-- index.html
+|   |-- pdf_extractor.py    # PDF text extraction + spell check
+|   |-- tts_engine.py      # EdgeTTS wrapper
+|   |-- job_manager.py     # Job queue management
+|   |-- extraction_manager.py
+|   |-- captioning.py      # Caption generation
+|   `-- cleanup.py         # Background cleanup
+|-- static/
+|   |-- index.html         # Main UI
+|   |-- css/               # Stylesheets
+|   |-- js/                # Frontend scripts
+|   `-- fonts/             # Font files
+|-- outputs/              # Generated audio/video
+`-- pdf_uploads/          # Uploaded PDFs
 ```
 
 ## Windows Setup
@@ -61,7 +67,7 @@ Python 3.13 note: use `PyMuPDF>=1.25.0`. Older PyMuPDF releases can fail to buil
 ```powershell
 cd E:\PROGRAMMING\BookdioWeb\audiobook_app
 py -3.10 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python app.py
 ```
@@ -77,6 +83,16 @@ If PowerShell blocks activation:
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
+
+## Optional: AI Spell Checker
+
+The spell checker supports an optional AI transformer for correcting gibberish/unknown words. To enable:
+
+1. Install torch and transformers (already in requirements.txt)
+2. In `audiobook_app/config.py`, set `SPELL_CHECK_TRANSFORMER = True`
+3. Or use the "Use AI transformer" checkbox in the web UI
+
+First run will download the DistilBERT model (~250MB). Subsequent runs use cached model.
 
 ## Run
 

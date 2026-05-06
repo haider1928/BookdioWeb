@@ -9,3 +9,5 @@ moviepy==1.0.3
 numpy
 torch
 transformers
+groq
+python-dotenv

@@ -113,6 +113,21 @@
                     </label>
                 </div>
 
+                <div class="field-group" style="margin-top: 1rem;">
+                    <label for="targetLanguage">Target Language:</label>
+                    <select id="targetLanguage" style="margin-left: 0.5rem; padding: 0.25rem;">
+                        <option value="en">English (Original)</option>
+                        <option value="ur">Urdu Translation</option>
+                    </select>
+                </div>
+
+                <div id="urduOptions" class="field-group" style="margin-top: 1rem; display: none;">
+                    <label for="urduFont">Urdu Font:</label>
+                    <select id="urduFont" style="margin-left: 0.5rem; padding: 0.25rem;">
+                        <option value="noto-nastaliq-urdu.otf">Noto Nastaliq Urdu</option>
+                    </select>
+                </div>
+
                 <div style="margin-top: 2rem;">
                     <button id="convertBtn" class="btn-primary" style="width: 100%;" disabled>
                         Convert to Audiobook

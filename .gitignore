@@ -40,8 +40,13 @@ Thumbs.db
 # App specific
 audiobook_app/outputs/
 audiobook_app/pdf_uploads/
+audiobook_app/data/
+audiobook_app/scratch/
 *.mp3
 *.pdf
 
 # Model cache (transformers)
 .cache/
+
+# Environment variables
+.env

@@ -6,33 +6,78 @@ from config import Config
 
 voices_bp = Blueprint("voices", __name__)
 
+_voices_cache = None
+
 
 @voices_bp.route("/voices", methods=["GET"])
 def get_voices():
+    global _voices_cache
+    
     try:
-        # Wrap async call with asyncio.run
+        # Try to get from cache first
+        if _voices_cache is not None:
+            locale = request.args.get("locale", "en")
+            return _format_voices(_voices_cache, locale)
+        
+        # Fetch from EdgeTTS API
         voices = asyncio.run(edge_tts.list_voices())
         
-        # Group by gender and filter for English
-        english_voices = [v for v in voices if "en-" in v["Locale"]]
+        # Cache the result
+        _voices_cache = voices
         
-        grouped = {
-            "Female": [],
-            "Male": [],
-            "Neutral": []
-        }
+        locale = request.args.get("locale", "en")
+        return _format_voices(voices, locale)
         
-        for voice in english_voices:
-            gender = voice.get("Gender", "Neutral")
-            grouped[gender].append({
-                "ShortName": voice["ShortName"],
-                "FriendlyName": voice["FriendlyName"],
-                "Locale": voice["Locale"]
-            })
-            
-        return success_response({"voices": grouped})
     except Exception as e:
-        return error_response(str(e))
+        # Fallback to hardcoded voices from config
+        print(f"Warning: EdgeTTS API failed, using fallback: {e}")
+        locale = request.args.get("locale", "en")
+        return _format_fallback_voices(locale)
+
+
+def _format_voices(voices, locale):
+    if locale == "ur":
+        target_voices = [v for v in voices if v["Locale"].startswith("ur-")]
+    else:
+        target_voices = [v for v in voices if v["Locale"].startswith("en-")]
+    
+    grouped = {"Female": [], "Male": [], "Neutral": []}
+    
+    for voice in target_voices:
+        gender = voice.get("Gender", "Neutral")
+        grouped[gender].append({
+            "ShortName": voice["ShortName"],
+            "FriendlyName": voice["FriendlyName"],
+            "Locale": voice["Locale"]
+        })
+    
+    return success_response({"voices": grouped})
+
+
+def _format_fallback_voices(locale):
+    """Fallback hardcoded voices when API fails"""
+    fallback_en = [
+        {"ShortName": "en-US-JennyNeural", "FriendlyName": "Jenny (US)", "Gender": "Female", "Locale": "en-US"},
+        {"ShortName": "en-US-GuyNeural", "FriendlyName": "Guy (US)", "Gender": "Male", "Locale": "en-US"},
+        {"ShortName": "en-GB-SoniaNeural", "FriendlyName": "Sonia (UK)", "Gender": "Female", "Locale": "en-GB"},
+    ]
+    fallback_ur = [
+        {"ShortName": "ur-PK-AsadNeural", "FriendlyName": "Asad (Pakistan)", "Gender": "Male", "Locale": "ur-PK"},
+        {"ShortName": "ur-PK-UzmaNeural", "FriendlyName": "Uzma (Pakistan)", "Gender": "Female", "Locale": "ur-PK"},
+    ]
+    
+    voices = fallback_ur if locale == "ur" else fallback_en
+    
+    grouped = {"Female": [], "Male": [], "Neutral": []}
+    for voice in voices:
+        gender = voice.get("Gender", "Neutral")
+        grouped[gender].append({
+            "ShortName": voice["ShortName"],
+            "FriendlyName": voice["FriendlyName"],
+            "Locale": voice["Locale"]
+        })
+    
+    return success_response({"voices": grouped})
 
 
 async def _synthesize_preview(voice: str, speed: str, text: str) -> bytes:

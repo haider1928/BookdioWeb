@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const voice = voiceSelect.value;
         const speedValue = parseInt(speedRange.value, 10);
         const speed = `${speedValue >= 0 ? "+" : ""}${speedValue}%`;
+        const targetLanguage = window.targetLanguage || 'en';
 
         convertBtn.disabled = true;
         conversionStatus.classList.remove("hidden");
@@ -59,6 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     text_chunks: window.extractedChunks,
                     voice,
                     speed,
+                    target_language: targetLanguage,
                 }),
             });
             if (!response.ok) {
@@ -157,11 +159,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function requestVideo(jobId) {
         const styleConfig = window.styleSelector ? window.styleSelector.getConfig() : {};
+        const targetLanguage = window.targetLanguage || 'en';
+        const urduFont = window.urduFont || null;
         try {
+            const body = {
+                style: styleConfig,
+                target_language: targetLanguage,
+            };
+            if (targetLanguage === 'ur' && urduFont) {
+                body.urdu_font = urduFont;
+            }
             const response = await fetch(`/download/${jobId}/video`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ style: styleConfig })
+                body: JSON.stringify(body)
             });
             if (!response.ok) {
                 const text = await response.text();

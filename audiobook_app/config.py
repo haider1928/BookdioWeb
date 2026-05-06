@@ -57,5 +57,14 @@ class Config:
         {"label": "Impact", "value": "Impact, sans-serif", "file": "impact.ttf", "fallback": "arial.ttf"},
     ]
 
+    AVAILABLE_URDU_FONTS = [
+        {"label": "Noto Nastaliq Urdu", "value": "'Noto Nastaliq Urdu', serif", "file": "noto-nastaliq-urdu.otf", "fallback": "arial.ttf"},
+    ]
+
+    URDU_VOICES = [
+        "ur-PK-AsadNeural",
+        "ur-PK-UzmaNeural",
+    ]
+
     PORT = 5000
     DEBUG = True

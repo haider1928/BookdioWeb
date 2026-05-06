@@ -23,6 +23,10 @@ def start_extraction():
     if not isinstance(use_spell_check, bool):
         use_spell_check = str(use_spell_check).lower() == "true"
 
+    translate_to_urdu = data.get("translate_to_urdu", False)
+    if not isinstance(translate_to_urdu, bool):
+        translate_to_urdu = str(translate_to_urdu).lower() == "true"
+
     try:
         if page_start is not None:
             page_start = int(page_start)
@@ -31,7 +35,8 @@ def start_extraction():
     except ValueError:
         return error_response("Invalid page range")
 
-    job_id = create_extraction_job(file_path, page_start, page_end, use_spell_check=use_spell_check)
+    print(f"[EXTRACT] translate_to_urdu: {translate_to_urdu}")
+    job_id = create_extraction_job(file_path, page_start, page_end, use_spell_check=use_spell_check, translate_to_urdu=translate_to_urdu)
     return success_response({"job_id": job_id})
 
 @extract_bp.route("/extract/status/<job_id>", methods=["GET"])

@@ -35,9 +35,9 @@ def _clean_expired_cache():
         del _extraction_cache[k]
 
 
-def create_extraction_job(pdf_path: Path, page_start: int | None = None, page_end: int | None = None, use_spell_check: bool = True) -> str:
+def create_extraction_job(pdf_path: Path, page_start: int | None = None, page_end: int | None = None, use_spell_check: bool = True, translate_to_urdu: bool = False) -> str:
     # Check cache first
-    cache_key = f"{_get_pdf_hash(pdf_path)}:{page_start}:{page_end}:{use_spell_check}"
+    cache_key = f"{_get_pdf_hash(pdf_path)}:{page_start}:{page_end}:{use_spell_check}:{translate_to_urdu}"
     _clean_expired_cache()
     cached = _extraction_cache.get(cache_key)
     if cached:
@@ -74,7 +74,7 @@ def create_extraction_job(pdf_path: Path, page_start: int | None = None, page_en
     # Start background thread
     thread = threading.Thread(
         target=_run_extraction,
-        args=(job_id, pdf_path, page_start, page_end, use_spell_check),
+        args=(job_id, pdf_path, page_start, page_end, use_spell_check, translate_to_urdu),
         daemon=True
     )
     thread.start()
@@ -85,7 +85,7 @@ def get_extraction_status(job_id: str) -> dict | None:
     with _extraction_lock:
         return _extraction_jobs.get(job_id)
 
-def _run_extraction(job_id: str, pdf_path: Path, page_start: int | None, page_end: int | None, use_spell_check: bool = True):
+def _run_extraction(job_id: str, pdf_path: Path, page_start: int | None, page_end: int | None, use_spell_check: bool = True, translate_to_urdu: bool = False):
     def progress_callback(done, total):
         with _extraction_lock:
             if job_id in _extraction_jobs:
@@ -113,11 +113,12 @@ def _run_extraction(job_id: str, pdf_path: Path, page_start: int | None, page_en
             page_end=page_end,
             progress_callback=progress_callback,
             spell_progress_callback=spell_progress_callback,
-            use_spell_check=use_spell_check
+            use_spell_check=use_spell_check,
+            translate_to_urdu=translate_to_urdu
         )
 
         # Store in cache
-        cache_key = f"{_get_pdf_hash(pdf_path)}:{page_start}:{page_end}:{use_spell_check}"
+        cache_key = f"{_get_pdf_hash(pdf_path)}:{page_start}:{page_end}:{use_spell_check}:{translate_to_urdu}"
         _extraction_cache[cache_key] = {"result": result, "timestamp": time.time()}
         print(f"[EXTRACTION] Cached result for {pdf_path.name}")
 

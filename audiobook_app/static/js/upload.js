@@ -12,7 +12,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const convertBtn = document.getElementById('convertBtn');
     const useSpellCheck = document.getElementById('useSpellCheck');
     const useTransformerSpell = document.getElementById('useTransformerSpell');
+    const targetLanguage = document.getElementById('targetLanguage');
+    const urduOptions = document.getElementById('urduOptions');
+    const urduFont = document.getElementById('urduFont');
     const pipelineStages = document.getElementById('pipelineStages');
+
+    targetLanguage.addEventListener('change', () => {
+        if (targetLanguage.value === 'ur') {
+            urduOptions.style.display = 'block';
+            // Reload voices for Urdu
+            if (window.loadVoices) {
+                console.log('[UPLOAD] Loading Urdu voices...');
+                window.loadVoices('ur');
+            } else {
+                console.warn('[UPLOAD] window.loadVoices not defined yet');
+            }
+        } else {
+            urduOptions.style.display = 'none';
+            // Reload English voices
+            if (window.loadVoices) {
+                window.loadVoices('en');
+            }
+        }
+    });
 
     window.extractedChunks = [];
     window.cleanScript = '';
@@ -83,7 +105,13 @@ document.addEventListener('DOMContentLoaded', () => {
             uploadStatus.textContent = 'Upload complete. Extracting text...';
 
             // PHASE 2: EXTRACTION
-            const extractParams = { upload_id: uploadId, use_spell_check: useSpellCheck.checked, use_transformer_spell: useTransformerSpell.checked };
+            const extractParams = {
+                upload_id: uploadId,
+                use_spell_check: useSpellCheck.checked,
+                use_transformer_spell: useTransformerSpell.checked,
+                translate_to_urdu: targetLanguage.value === 'ur',
+                target_language: targetLanguage.value
+            };
             if (usePageRange.checked) {
                 const startValue = parseInt(pageStart.value, 10);
                 const endValue = parseInt(pageEnd.value, 10);
@@ -93,6 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            console.log('[UPLOAD] Sending to /extract:', extractParams);
             const extractInitResponse = await fetch('/extract', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -112,6 +141,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updatePipelineStage('tts', 'active');
             window.extractedChunks = extractionResult.text_chunks;
             window.cleanScript = extractionResult.clean_script || '';
+            window.urduScript = extractionResult.urdu_script || null;
+            window.targetLanguage = targetLanguage.value;
+            window.urduFont = urduFont ? urduFont.value : null;
             uploadStatus.textContent = 'Done.';
             setUploadProgress(100, 'Ready.', false);
 

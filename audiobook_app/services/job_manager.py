@@ -14,7 +14,7 @@ _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
 
-def create_job(text_chunks: list[str], voice: str, speed: str) -> dict:
+def create_job(text_chunks: list[str], voice: str, speed: str, target_language: str = "en") -> dict:
     job_id = str(uuid4().hex)
     mp3_path = Config.OUTPUT_FOLDER / f"{job_id}.mp3"
     word_vtt_path = Config.OUTPUT_FOLDER / f"{job_id}.words.vtt"
@@ -28,6 +28,7 @@ def create_job(text_chunks: list[str], voice: str, speed: str) -> dict:
         "preview_ready": False,
         "vtt_ready": False,
         "captions_ready": False,
+        "target_language": target_language,
         "vtt_entries": [],  # list of {word, startMs, endMs}
         "captions": [],  # list of {index, text, startMs, endMs, words}
         "word_vtt_path": str(word_vtt_path),

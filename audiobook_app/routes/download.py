@@ -72,15 +72,25 @@ def request_video(job_id):
 
     # Accept style config from request
     style_config = {}
+    target_language = "en"
+    urdu_font = None
     try:
         if request.is_json:
             data = request.get_json(silent=True)
             if data:
                 style_config = data.get("style", {})
+                target_language = data.get("target_language", "en")
+                urdu_font = data.get("urdu_font", None)
     except Exception as e:
         print(f"[DOWNLOAD] Error parsing style config: {e}")
 
     print(f"[DOWNLOAD] Style config received: {style_config}")
+    print(f"[DOWNLOAD] Target language: {target_language}, Urdu font: {urdu_font}")
+
+    # If Urdu selected, update font to Urdu font
+    if target_language == "ur" and urdu_font:
+        style_config["font"] = urdu_font
+        print(f"[DOWNLOAD] Using Urdu font: {urdu_font}")
 
     update_job(
         job_id,
@@ -89,6 +99,7 @@ def request_video(job_id):
         video_render_version=Config.VIDEO_RENDER_VERSION,
         video_error=None,
         video_style=style_config,
+        target_language=target_language,
     )
     threading.Thread(target=_generate_video_safe, args=(job_id,), daemon=True).start()
     return success_response({"video_status": "generating", "video_progress": 0}, 202)
@@ -143,8 +154,8 @@ def _generate_video_safe(job_id: str):
 CaptionRenderData = dict
 # Keys: font, lines (for word-level), wrapped_lines (for line-level), etc.
 
-def _precalculate_caption_data(captions: list[dict], resolution: tuple, style: dict, font_value: str):
-    """Pre-calculate font sizes and word wrapping for all captions ONCE before rendering."""
+def _precalculate_caption_data(captions: list[dict], resolution: tuple, style: dict, font_value: str, target_language: str = "en"):
+    """Precalculate font sizes and word wrapping for all captions ONCE before rendering."""
     SAFE_MARGIN = 120
     SAFE_WIDTH = resolution[0] - 2 * SAFE_MARGIN
     font_size = style.get("fontSize", None)  # None = auto-fit
@@ -158,17 +169,17 @@ def _precalculate_caption_data(captions: list[dict], resolution: tuple, style: d
     for idx, cap in enumerate(captions):
         text = cap.get("text", "")
         if not text:
-            caption_data[idx] = {"font": _get_cached_font(font_value, 24), "lines": [], "wrapped_lines": []}
+            caption_data[idx] = {"font": _get_cached_font(font_value, 24, target_language), "lines": [], "wrapped_lines": []}
             continue
 
         # Calculate font - use user-specified size or auto-fit
         if font_size and 24 <= font_size <= 120:
-            font = _get_cached_font(font_value, font_size)
+            font = _get_cached_font(font_value, font_size, target_language)
         else:
             # Auto-fit: find largest font that fits
             fitted_font = None
             for size in range(48, 23, -2):
-                test_font = _get_cached_font(font_value, size)
+                test_font = _get_cached_font(font_value, size, target_language)
                 test_lines = _wrap_text(scratch_draw, text, test_font, SAFE_WIDTH)
                 if not test_lines:
                     break
@@ -179,7 +190,7 @@ def _precalculate_caption_data(captions: list[dict], resolution: tuple, style: d
                     if max_lw <= SAFE_WIDTH:
                         fitted_font = test_font
                         break
-            font = fitted_font if fitted_font else _get_cached_font(font_value, 24)
+            font = fitted_font if fitted_font else _get_cached_font(font_value, 24, target_language)
 
         # Pre-calculate word wrapping for word-level rendering
         words = cap.get("word_entries", [])
@@ -245,6 +256,7 @@ def _generate_video(job_id: str):
     font_value = style.get("font", "'Inter', sans-serif")
     font_size = style.get("fontSize", None)  # None = auto-fit
     word_highlight = style.get("wordHighlight", True)
+    target_language = job.get("target_language", "en")
 
     background = _make_preview_background(resolution, bg_start, bg)
     audio = AudioFileClip(str(mp3_path))
@@ -253,7 +265,7 @@ def _generate_video(job_id: str):
 
     # PRE-CALCULATE: font sizes, word wrapping, line wrapping
     update_job(job_id, video_progress=7)
-    caption_data = _precalculate_caption_data(captions, resolution, style, font_value)
+    caption_data = _precalculate_caption_data(captions, resolution, style, font_value, target_language)
     update_job(job_id, video_progress=10)
 
     # Layout renderer dispatch
@@ -348,14 +360,21 @@ def _make_preview_background(resolution: tuple[int, int], bg_start: tuple = None
 # Font cache to avoid loading from disk on every call
 _FONT_CACHE: dict[str, ImageFont.ImageFont] = {}
 
-def _get_cached_font(font_value: str, size: int) -> ImageFont.ImageFont:
+def _get_cached_font(font_value: str, size: int, target_language: str = "en") -> ImageFont.ImageFont:
     """Load font with fallback, with caching."""
-    key = f"{font_value}_{size}"
+    key = f"{font_value}_{size}_{target_language}"
     if key in _FONT_CACHE:
         return _FONT_CACHE[key]
 
     font_name = font_value.split(",")[0].strip().strip("'\"")
-    candidates = [font_name + ".ttf", font_name + ".ttc"]
+    candidates = [font_name + ".ttf", font_name + ".ttc", font_name + ".otf"]
+    
+    # Add Urdu font paths if target language is Urdu
+    if target_language == "ur":
+        static_fonts_dir = Config.STATIC_FOLDER / "fonts"
+        candidates.insert(0, str(static_fonts_dir / "noto-nastaliq-urdu.otf"))
+        candidates.insert(1, str(static_fonts_dir / font_name + ".otf"))
+    
     # Add common Windows font paths
     windows_fonts = [
         "C:\\Windows\\Fonts\\" + f for f in [
@@ -429,10 +448,17 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
-def _load_font_with_fallback(font_value: str, size: int) -> ImageFont.ImageFont:
+def _load_font_with_fallback(font_value: str, size: int, target_language: str = "en") -> ImageFont.ImageFont:
     """Load font with fallback to system fonts."""
     font_name = font_value.split(",")[0].strip().strip("'\"")
-    candidates = [font_name + ".ttf", font_name + ".ttc"]
+    candidates = [font_name + ".ttf", font_name + ".ttc", font_name + ".otf"]
+    
+    # Add Urdu font paths if target language is Urdu
+    if target_language == "ur":
+        static_fonts_dir = Config.STATIC_FOLDER / "fonts"
+        candidates.insert(0, str(static_fonts_dir / "noto-nastaliq-urdu.otf"))
+        candidates.insert(1, str(static_fonts_dir / font_name + ".otf"))
+    
     # Add common Windows font paths
     windows_fonts = [
         "C:\\Windows\\Fonts\\" + f for f in [

@@ -391,7 +391,8 @@ def extract_pdf_text(
     page_end: int | None = None,
     progress_callback: Callable | None = None,
     spell_progress_callback: Callable | None = None,
-    use_spell_check: bool = Config.SPELL_CHECK_ENABLED
+    use_spell_check: bool = Config.SPELL_CHECK_ENABLED,
+    translate_to_urdu: bool = False
 ) -> dict:
     start_time = time.time()
     doc = fitz.open(str(pdf_path))
@@ -455,9 +456,28 @@ def extract_pdf_text(
     clean_script = " ".join(corrected_sentences).strip()
     text_chunks = _build_chunks(corrected_sentences, Config.TTS_CHUNK_WORDS)
 
+    urdu_script = None
+    urdu_text_chunks = None
+
+    if translate_to_urdu:
+        from services.translator import translate_batch
+        print("[PDF] Translating to Urdu...")
+        translate_start = time.time()
+        try:
+            urdu_translated = translate_batch(corrected_sentences)
+            urdu_sentences = [t if t else s for t, s in zip(urdu_translated, corrected_sentences)]
+            urdu_script = " ".join(urdu_sentences).strip()
+            urdu_text_chunks = _build_chunks(urdu_sentences, Config.TTS_CHUNK_WORDS)
+            translate_time = time.time() - translate_start
+            print(f"[PDF] Translation took {translate_time:.2f}s")
+        except Exception as e:
+            print(f"[PDF] Translation failed: {e}")
+
     return {
         "text_chunks": text_chunks,
         "clean_script": clean_script,
+        "urdu_text_chunks": urdu_text_chunks,
+        "urdu_script": urdu_script,
         "page_count": page_count,
         "page_range": {"start": start_page, "end": end_page}
         if page_start is not None or page_end is not None

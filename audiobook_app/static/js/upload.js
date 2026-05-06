@@ -38,6 +38,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.extractedChunks = [];
     window.cleanScript = '';
+    window.urduScript = null;
+    window.urduTextChunks = null;
 
     uploadZone.addEventListener('click', () => fileInput.click());
     usePageRange.addEventListener('change', () => {
@@ -142,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
             window.extractedChunks = extractionResult.text_chunks;
             window.cleanScript = extractionResult.clean_script || '';
             window.urduScript = extractionResult.urdu_script || null;
+            window.urduTextChunks = extractionResult.urdu_text_chunks || null;
             window.targetLanguage = targetLanguage.value;
             window.urduFont = urduFont ? urduFont.value : null;
             uploadStatus.textContent = 'Done.';

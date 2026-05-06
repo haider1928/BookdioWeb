@@ -43,6 +43,7 @@ audiobook_app/pdf_uploads/
 audiobook_app/data/
 audiobook_app/scratch/
 *.mp3
+*.mp4
 *.pdf
 
 # Model cache (transformers)

@@ -7,6 +7,16 @@ from PIL import Image, ImageDraw, ImageFont
 from flask import Blueprint, request, send_file
 from moviepy.editor import AudioFileClip, VideoClip
 
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    HAS_URDU_SUPPORT = True
+except ImportError:
+    HAS_URDU_SUPPORT = False
+    print("[VIDEO] Warning: arabic-reshaper or python-bidi not installed. Urdu text may render incorrectly.")
+
+SAFE_MARGIN = 120  # Constant for text margins
+
 from config import Config
 from routes import error_response, success_response
 from services.job_manager import get_full_job_data, update_job
@@ -17,6 +27,27 @@ _video_locks: dict[str, threading.Lock] = {}
 # Sync offset: positive = highlight appears later, negative = highlight appears earlier
 # Set to 0 for accurate edge-tts timing
 WORD_TIMING_OFFSET_MS = 0
+
+
+def _reshape_urdu_text(text: str) -> str:
+    """Reshape and reorder Urdu/Arabic text for proper display.
+    Pipeline: raw Urdu → reshape → reorder for display → RTL.
+    """
+    if not text or not HAS_URDU_SUPPORT:
+        return text
+
+    try:
+        print(f"[VIDEO] Reshaping Urdu text: {text[:50]}...")
+        # Reshape Arabic characters to their connected forms
+        reshaped = arabic_reshaper.reshape(text)
+        print(f"[VIDEO] After reshape: {reshaped[:50]}...")
+        # Reorder for visual display (BIDI algorithm)
+        display_text = get_display(reshaped)
+        print(f"[VIDEO] After BIDI: {display_text[:50]}...")
+        return display_text
+    except Exception as e:
+        print(f"[VIDEO] Error reshaping Urdu text: {e}")
+        return text
 
 
 @download_bp.route("/download/<job_id>", methods=["GET"])
@@ -168,6 +199,7 @@ def _precalculate_caption_data(captions: list[dict], resolution: tuple, style: d
 
     for idx, cap in enumerate(captions):
         text = cap.get("text", "")
+
         if not text:
             caption_data[idx] = {"font": _get_cached_font(font_value, 24, target_language), "lines": [], "wrapped_lines": []}
             continue
@@ -192,7 +224,7 @@ def _precalculate_caption_data(captions: list[dict], resolution: tuple, style: d
                         break
             font = fitted_font if fitted_font else _get_cached_font(font_value, 24, target_language)
 
-        # Pre-calculate word wrapping for word-level rendering
+        # Pre-calculate word wrapping for word-level rendering - reshape each word for Urdu
         words = cap.get("word_entries", [])
         valid_words = [w for w in words if w.get("endMs", 0) > w.get("startMs", 0) and w.get("word", "").strip()]
         lines = []
@@ -201,23 +233,28 @@ def _precalculate_caption_data(captions: list[dict], resolution: tuple, style: d
             current_line_width = 0
             spacing = _calculate_word_spacing(font)
             for w in valid_words:
-                word_width = scratch_draw.textbbox((0,0), w["word"], font=font)[2]
+                word_text = w.get("word", "")
+                # Reshape Urdu words individually
+                if target_language == "ur":
+                    word_text = _reshape_urdu_text(word_text)
+                word_width = scratch_draw.textbbox((0,0), word_text, font=font)[2]
                 if current_line:
                     test_width = current_line_width + spacing + word_width
                     if test_width <= SAFE_WIDTH:
-                        current_line.append(w)
+                        current_line.append({**w, "display_word": word_text})
                         current_line_width = test_width
                     else:
                         lines.append(current_line)
-                        current_line = [w]
+                        current_line = [{**w, "display_word": word_text}]
                         current_line_width = word_width
                 else:
-                    current_line.append(w)
+                    current_line.append({**w, "display_word": word_text})
                     current_line_width = word_width
             if current_line:
                 lines.append(current_line)
 
         # Pre-calculate line wrapping for line-level rendering
+        # For Urdu, use the original text for line wrapping (wrapping is based on word count, not visual order)
         wrapped_lines = _wrap_text(scratch_draw, text, font, SAFE_WIDTH)
 
         caption_data[idx] = {
@@ -257,6 +294,7 @@ def _generate_video(job_id: str):
     font_size = style.get("fontSize", None)  # None = auto-fit
     word_highlight = style.get("wordHighlight", True)
     target_language = job.get("target_language", "en")
+    print(f"[VIDEO] Generating video for job {job_id}, target_language: {target_language}")
 
     background = _make_preview_background(resolution, bg_start, bg)
     audio = AudioFileClip(str(mp3_path))
@@ -292,7 +330,7 @@ def _generate_video(job_id: str):
         frame = background.copy()
         draw = ImageDraw.Draw(frame)
 
-        render_fn(draw, captions, active_idx, current_ms, resolution, active, inactive, active_style, font_value, word_highlight, caption_data)
+        render_fn(draw, captions, active_idx, current_ms, resolution, active, inactive, active_style, font_value, word_highlight, caption_data, target_language)
 
         return np.array(frame.convert("RGB"))
 
@@ -373,7 +411,7 @@ def _get_cached_font(font_value: str, size: int, target_language: str = "en") ->
     if target_language == "ur":
         static_fonts_dir = Config.STATIC_FOLDER / "fonts"
         candidates.insert(0, str(static_fonts_dir / "noto-nastaliq-urdu.otf"))
-        candidates.insert(1, str(static_fonts_dir / font_name + ".otf"))
+        candidates.insert(1, str(static_fonts_dir / (font_name + ".otf")))
     
     # Add common Windows font paths
     windows_fonts = [
@@ -457,7 +495,7 @@ def _load_font_with_fallback(font_value: str, size: int, target_language: str = 
     if target_language == "ur":
         static_fonts_dir = Config.STATIC_FOLDER / "fonts"
         candidates.insert(0, str(static_fonts_dir / "noto-nastaliq-urdu.otf"))
-        candidates.insert(1, str(static_fonts_dir / font_name + ".otf"))
+        candidates.insert(1, str(static_fonts_dir / (font_name + ".otf")))
     
     # Add common Windows font paths
     windows_fonts = [
@@ -530,7 +568,7 @@ def _calculate_word_spacing(font) -> int:
 
 # Layout Renderers
 
-def _render_multi_line(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None):
+def _render_multi_line(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None, target_language="en"):
     """Render 3 lines: prev/active/next with proper vertical spacing."""
     prev_line = captions[active_idx - 1]["text"] if active_idx > 0 else ""
     active_line = captions[active_idx]["text"]
@@ -557,12 +595,12 @@ def _render_multi_line(draw, captions, active_idx, current_ms, resolution, activ
     top_y = max(60, center_y - line_spacing)
     bottom_y = min(resolution[1] - 60, center_y + line_spacing)
 
-    _draw_caption_line(draw, prev_line, top_y, prev_font, (*inactive_color, 95), resolution[0], active_style, inactive_color, font_value, word_highlight=word_highlight, wrapped_lines=prev_wrapped)
-    _draw_caption_line(draw, active_line, center_y, active_font, (*active_color, 255), resolution[0], active_style, active_color, font_value, shadow=True, is_active=True, caption=captions[active_idx], current_ms=current_ms, word_highlight=word_highlight, wrapped_lines=active_wrapped, word_lines=active_word_lines)
-    _draw_caption_line(draw, next_line, bottom_y, next_font, (*inactive_color, 200), resolution[0], active_style, inactive_color, font_value, word_highlight=word_highlight, wrapped_lines=next_wrapped)
+    _draw_caption_line(draw, prev_line, top_y, prev_font, (*inactive_color, 95), resolution[0], active_style, inactive_color, font_value, word_highlight=word_highlight, wrapped_lines=prev_wrapped, target_language=target_language)
+    _draw_caption_line(draw, active_line, center_y, active_font, (*active_color, 255), resolution[0], active_style, active_color, font_value, shadow=True, is_active=True, caption=captions[active_idx], current_ms=current_ms, word_highlight=word_highlight, wrapped_lines=active_wrapped, word_lines=active_word_lines, target_language=target_language)
+    _draw_caption_line(draw, next_line, bottom_y, next_font, (*inactive_color, 200), resolution[0], active_style, inactive_color, font_value, word_highlight=word_highlight, wrapped_lines=next_wrapped, target_language=target_language)
 
 
-def _render_single_line(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None):
+def _render_single_line(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None, target_language="en"):
     """Render only the active line, centered. Uses SAFE_MARGIN=120px each side."""
     active_line = captions[active_idx]["text"]
     center_y = resolution[1] // 2  # Proper center (540 for 1080p)
@@ -573,10 +611,10 @@ def _render_single_line(draw, captions, active_idx, current_ms, resolution, acti
     wrapped_lines = cd.get("wrapped_lines", [])
     word_lines = cd.get("word_lines", [])
 
-    _draw_caption_line(draw, active_line, center_y, font, (*active_color, 255), resolution[0], active_style, active_color, font_value, shadow=True, is_active=True, caption=captions[active_idx], current_ms=current_ms, word_highlight=word_highlight, wrapped_lines=wrapped_lines, word_lines=word_lines)
+    _draw_caption_line(draw, active_line, center_y, font, (*active_color, 255), resolution[0], active_style, active_color, font_value, shadow=True, is_active=True, caption=captions[active_idx], current_ms=current_ms, word_highlight=word_highlight, wrapped_lines=wrapped_lines, word_lines=word_lines, target_language=target_language)
 
 
-def _render_typewriter(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None):
+def _render_typewriter(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None, target_language="en"):
     """Typewriter mode: words appear sequentially with different opacities. Uses SAFE_MARGIN and pre-calculated word_lines."""
     caption = captions[active_idx]
 
@@ -628,48 +666,93 @@ def _render_typewriter(draw, captions, active_idx, current_ms, resolution, activ
     # Draw each line
     spacing = _calculate_word_spacing(font)
     for line in word_lines:
-        line_width = sum(draw.textbbox((0,0), w["word"], font=font)[2] for w in line) + spacing * (len(line) - 1)
-        x = max(SAFE_MARGIN, (resolution[0] - line_width) // 2)
+        line_width = sum(draw.textbbox((0,0), w.get("display_word", w["word"]), font=font)[2] for w in line) + spacing * (len(line) - 1)
 
-        for w in line:
-            is_past = current_ms > w["endMs"]
-            is_active = (w == all_words[active_word_idx]) if active_word_idx >= 0 else False
-            is_future = current_ms < w["startMs"]
+        if target_language == "ur":
+            # RTL: anchor block to right margin
+            right_edge = resolution[0] - SAFE_MARGIN
 
-            if is_past:
-                opacity = 155  # 60% of 255
-            elif is_active:
-                opacity = 255
-            else:
-                opacity = 77  # 30% of 255
+            for w in line:
+                is_past = current_ms > w["endMs"]
+                is_active = (w == all_words[active_word_idx]) if active_word_idx >= 0 else False
+                is_future = current_ms < w["startMs"]
 
-            color = active_color if (is_active or is_past) else inactive_color
-            text_color = (*color, opacity)
+                if is_past:
+                    opacity = 155  # 60% of 255
+                elif is_active:
+                    opacity = 255
+                else:
+                    opacity = 77  # 30% of 255
 
-            bbox = draw.textbbox((x, current_y), w["word"], font=font)
-            word_width = bbox[2] - bbox[0]
+                color = active_color if (is_active or is_past) else inactive_color
+                text_color = (*color, opacity)
 
-            if is_active:
-                if active_style == "underline":
-                    draw.line([(bbox[0], bbox[3] + 4), (bbox[2], bbox[3] + 4)], fill=(*color, opacity), width=3)
-                elif active_style == "glow":
-                    _draw_text_with_glow(draw, x, current_y, w["word"], font, color)
-                elif active_style == "block":
-                    pad = 6
-                    draw.rectangle([bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad], fill=(*color, 200))
-                    text_color_inv = (*_inverse_color(color), 255)
-                    draw.text((x, current_y), w["word"], font=font, fill=text_color_inv)
-                    text_color = None
+                word_text = w.get("display_word", w["word"])
+                word_width = draw.textbbox((0,0), word_text, font=font)[2]
+                x = right_edge - word_width
+                bbox = draw.textbbox((x, current_y), word_text, font=font)
 
-            if text_color is not None:
-                draw.text((x, current_y), w["word"], font=font, fill=text_color)
+                if is_active:
+                    if active_style == "underline":
+                        draw.line([(bbox[0], bbox[3] + 4), (bbox[2], bbox[3] + 4)], fill=(*color, opacity), width=3)
+                    elif active_style == "glow":
+                        _draw_text_with_glow(draw, x, current_y, word_text, font, color)
+                    elif active_style == "block":
+                        pad = 6
+                        draw.rectangle([bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad], fill=(*color, 200))
+                        text_color_inv = (*_inverse_color(color), 255)
+                        draw.text((x, current_y), word_text, font=font, fill=text_color_inv)
+                        text_color = None
 
-            x += word_width + spacing
+                if text_color is not None:
+                    draw.text((x, current_y), word_text, font=font, fill=text_color)
+
+                # Move right_edge left for next word
+                right_edge = x - spacing
+        else:
+            # LTR: center the block
+            x = max(SAFE_MARGIN, (resolution[0] - line_width) // 2)
+
+            for w in line:
+                is_past = current_ms > w["endMs"]
+                is_active = (w == all_words[active_word_idx]) if active_word_idx >= 0 else False
+                is_future = current_ms < w["startMs"]
+
+                if is_past:
+                    opacity = 155  # 60% of 255
+                elif is_active:
+                    opacity = 255
+                else:
+                    opacity = 77  # 30% of 255
+
+                color = active_color if (is_active or is_past) else inactive_color
+                text_color = (*color, opacity)
+
+                word_text = w.get("display_word", w["word"])
+                bbox = draw.textbbox((x, current_y), word_text, font=font)
+                word_width = bbox[2] - bbox[0]
+
+                if is_active:
+                    if active_style == "underline":
+                        draw.line([(bbox[0], bbox[3] + 4), (bbox[2], bbox[3] + 4)], fill=(*color, opacity), width=3)
+                    elif active_style == "glow":
+                        _draw_text_with_glow(draw, x, current_y, word_text, font, color)
+                    elif active_style == "block":
+                        pad = 6
+                        draw.rectangle([bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad], fill=(*color, 200))
+                        text_color_inv = (*_inverse_color(color), 255)
+                        draw.text((x, current_y), word_text, font=font, fill=text_color_inv)
+                        text_color = None
+
+                if text_color is not None:
+                    draw.text((x, current_y), word_text, font=font, fill=text_color)
+
+                x += word_width + spacing
 
         current_y += line_height + line_spacing
 
 
-def _render_center_focus(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None):
+def _render_center_focus(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None, target_language="en"):
     """Render 5 lines: 2 prev (dim), active (bright), 2 next (dimmer). Uses SAFE_MARGIN=120px each side."""
     lines_to_show = []
     for i in range(max(0, active_idx - 2), min(len(captions), active_idx + 3)):
@@ -703,7 +786,7 @@ def _render_center_focus(draw, captions, active_idx, current_ms, resolution, act
         _draw_caption_line(draw, line["text"], y, font, (*color, max(30, opacity)), resolution[0], active_style, color, font_value, is_active=(line_idx == active_idx), caption=line, current_ms=current_ms, word_highlight=word_highlight, wrapped_lines=wrapped_lines)
 
 
-def _render_bottom_banner(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None):
+def _render_bottom_banner(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None, target_language="en"):
     """Render active line in a semi-transparent banner at the bottom."""
     active_line = captions[active_idx]["text"]
     banner_height = int(resolution[1] * 0.15)
@@ -723,7 +806,7 @@ def _render_bottom_banner(draw, captions, active_idx, current_ms, resolution, ac
     _draw_caption_line(draw, active_line, center_y, font, (*active_color, 255), resolution[0], active_style, active_color, font_value, shadow=True, is_active=True, caption=captions[active_idx], current_ms=current_ms, word_highlight=word_highlight, wrapped_lines=wrapped_lines)
 
 
-def _render_full_page(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None):
+def _render_full_page(draw, captions, active_idx, current_ms, resolution, active_color, inactive_color, active_style, font_value, word_highlight=True, caption_data=None, target_language="en"):
     """Render active line dominating the screen with large text."""
     active_line = captions[active_idx]["text"]
     center_y = resolution[1] // 2
@@ -736,7 +819,7 @@ def _render_full_page(draw, captions, active_idx, current_ms, resolution, active
     _draw_caption_line(draw, active_line, center_y, font, (*active_color, 255), resolution[0], active_style, active_color, font_value, shadow=True, is_active=True, caption=captions[active_idx], current_ms=current_ms, word_highlight=word_highlight, wrapped_lines=wrapped_lines)
 
 
-def _draw_caption_line(draw, text: str, y: int, font, color: tuple, canvas_width: int, active_style: str, active_color: tuple, font_value: str, shadow: bool = False, is_active: bool = False, caption: dict = None, current_ms: int = 0, word_highlight: bool = True, wrapped_lines: list = None, word_lines: list = None):
+def _draw_caption_line(draw, text: str, y: int, font, color: tuple, canvas_width: int, active_style: str, active_color: tuple, font_value: str, shadow: bool = False, is_active: bool = False, caption: dict = None, current_ms: int = 0, word_highlight: bool = True, wrapped_lines: list = None, word_lines: list = None, target_language: str = "en"):
     """Draw a caption line centered at y coordinate (y is the vertical center of the text block).
     Uses SAFE_MARGIN of 120px from each side."""
     if not text:
@@ -759,7 +842,7 @@ def _draw_caption_line(draw, text: str, y: int, font, color: tuple, canvas_width
 
     if is_active and caption and "word_entries" in caption and word_highlight:
         # Word-level rendering - y is the center of the text block
-        _draw_word_level(draw, caption, current_ms, y, font, active_color, color, active_style, canvas_width, word_lines=word_lines)
+        _draw_word_level(draw, caption, current_ms, y, font, active_color, color, active_style, canvas_width, word_lines=word_lines, target_language=target_language)
     else:
         # Line-level rendering - center the block of text at y
         # Pillow: draw.text((x,y),...) places BASELINE at y
@@ -779,12 +862,16 @@ def _draw_caption_line(draw, text: str, y: int, font, color: tuple, canvas_width
             current_y += line_height + line_spacing
 
 
-def _draw_word_level(draw, caption: dict, current_ms: int, center_y: int, font, active_color: tuple, inactive_color: tuple, active_style: str, canvas_width: int, word_lines: list = None):
+def _draw_word_level(draw, caption: dict, current_ms: int, center_y: int, font, active_color: tuple, inactive_color: tuple, active_style: str, canvas_width: int, word_lines: list = None, target_language: str = "en"):
     """Draw a caption line with word-level highlighting. center_y is the vertical CENTER of the text block.
     Uses pre-calculated word_lines from caption_data if provided."""
+    
+    # Define SAFE_MARGIN at function scope level
+    SAFE_MARGIN = 120
+    
     # Use pre-calculated word_lines if provided
     lines = word_lines if word_lines else []
-
+    
     if not lines:
         # Fallback: filter and group words (shouldn't happen if pre-calculated)
         words = caption.get("word_entries", [])
@@ -793,44 +880,46 @@ def _draw_word_level(draw, caption: dict, current_ms: int, center_y: int, font, 
         valid_words = [w for w in words if w.get("endMs", 0) > w.get("startMs", 0) and w.get("word", "").strip()]
         if not valid_words:
             return
+
         # Group words into lines
-        SAFE_MARGIN = 120
         max_line_width = canvas_width - 2 * SAFE_MARGIN
         lines = []
         current_line = []
         current_line_width = 0
         spacing = _calculate_word_spacing(font)
         for w in valid_words:
-            word_width = draw.textbbox((0, 0), w["word"], font=font)[2]
+            word_text = w.get("display_word", w.get("word", ""))
+            word_width = draw.textbbox((0,0), word_text, font=font)[2]
             if current_line:
                 test_width = current_line_width + spacing + word_width
                 if test_width <= max_line_width:
-                    current_line.append(w)
+                    current_line.append({**w, "display_word": word_text})
                     current_line_width = test_width
                 else:
                     lines.append(current_line)
-                    current_line = [w]
+                    current_line = [{**w, "display_word": word_text}]
                     current_line_width = word_width
             else:
-                current_line.append(w)
+                current_line.append({**w, "display_word": word_text})
                 current_line_width = word_width
         if current_line:
             lines.append(current_line)
-        if not lines:
-            return
-
+    
+    if not lines:
+        return
+    
     # Calculate line height and total block height
-    test_bbox = draw.textbbox((0, 0), "Ay", font=font)
+    test_bbox = draw.textbbox((0,0), "Ay", font=font)
     line_height = test_bbox[3] - test_bbox[1]
     line_spacing = max(10, int(line_height * 0.4))
     total_height = len(lines) * line_height + (len(lines) - 1) * line_spacing
-
+    
     # Center the block of lines at center_y
     current_y = center_y - (total_height // 2)
     # Adjust for Pillow baseline: draw.text() places baseline at y
     baseline_offset = (test_bbox[1] + test_bbox[3]) / 2
     current_y = int(current_y - baseline_offset)
-
+    
     # Find active word to determine which word to highlight
     active_word_info = None
     for line_idx, line in enumerate(lines):
@@ -840,38 +929,77 @@ def _draw_word_level(draw, caption: dict, current_ms: int, center_y: int, font, 
                 break
         if active_word_info:
             break
-
+    
     # Draw each line
     spacing = _calculate_word_spacing(font)
     for line_idx, line in enumerate(lines):
         # Calculate line width
-        line_width = sum(draw.textbbox((0, 0), w["word"], font=font)[2] for w in line) + spacing * (len(line) - 1)
-        SAFE_MARGIN = 120
-        x = max(SAFE_MARGIN, (canvas_width - line_width) // 2)
+        line_width = sum(draw.textbbox((0,0), w.get("display_word", w["word"]), font=font)[2] for w in line) + spacing * (len(line) - 1)
 
-        for word_idx, w in enumerate(line):
-            is_active = (active_word_info and active_word_info[0] == line_idx and active_word_info[1] == word_idx)
-            color = active_color if is_active else inactive_color[:3]
-            text_color = (*color, 255)
+        if target_language == "ur":
+            # RTL: anchor block to right margin, draw words from right to left
+            # Words are in memory order [W1, W2, W3, W4] where W1 is first spoken
+            # W1 should land on far right, W2 to its left, etc.
+            # Visual order left-to-right on canvas: W4, W3, W2, W1 (reads right-to-left)
+            right_edge = canvas_width - SAFE_MARGIN
 
-            bbox = draw.textbbox((x, current_y), w["word"], font=font)
-            word_width = bbox[2] - bbox[0]
+            for word_idx, w in enumerate(line):
+                is_active = (active_word_info and active_word_info[0] == line_idx and active_word_info[1] == word_idx)
+                color = active_color if is_active else inactive_color[:3]
+                text_color = (*color, 255)
 
-            if is_active:
-                if active_style == "underline":
-                    draw.line([(bbox[0], bbox[3] + 4), (bbox[2], bbox[3] + 4)], fill=(*color, 255), width=3)
-                elif active_style == "glow":
-                    _draw_text_with_glow(draw, x, current_y, w["word"], font, color)
-                elif active_style == "block":
-                    pad = 6
-                    draw.rectangle([bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad], fill=(*color, 200))
-                    text_color_inv = (*_inverse_color(color), 255)
-                    draw.text((x, current_y), w["word"], font=font, fill=text_color_inv)
-                    text_color = None
+                word_text = w.get("display_word", w["word"])
+                word_width = draw.textbbox((0,0), word_text, font=font)[2]
 
-            if text_color is not None:
-                draw.text((x, current_y), w["word"], font=font, fill=text_color)
+                # Position: right edge of word at right_edge
+                x = right_edge - word_width
+                bbox = draw.textbbox((x, current_y), word_text, font=font)
 
-            x += word_width + spacing
+                if is_active:
+                    if active_style == "underline":
+                        draw.line([(bbox[0], bbox[3] + 4), (bbox[2], bbox[3] + 4)], fill=(*color, 255), width=3)
+                    elif active_style == "glow":
+                        _draw_text_with_glow(draw, x, current_y, word_text, font, color)
+                    elif active_style == "block":
+                        pad = 6
+                        draw.rectangle([bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad], fill=(*color, 200))
+                        text_color_inv = (*_inverse_color(color), 255)
+                        draw.text((x, current_y), word_text, font=font, fill=text_color_inv)
+                        text_color = None
 
+                if text_color is not None:
+                    draw.text((x, current_y), word_text, font=font, fill=text_color)
+
+                # Move right_edge left for next word (subtract word width + spacing)
+                right_edge = x - spacing
+        else:
+            # LTR: center the block
+            x = max(SAFE_MARGIN, (canvas_width - line_width) // 2)
+
+            for word_idx, w in enumerate(line):
+                is_active = (active_word_info and active_word_info[0] == line_idx and active_word_info[1] == word_idx)
+                color = active_color if is_active else inactive_color[:3]
+                text_color = (*color, 255)
+
+                word_text = w.get("display_word", w["word"])
+                bbox = draw.textbbox((x, current_y), word_text, font=font)
+                word_width = bbox[2] - bbox[0]
+
+                if is_active:
+                    if active_style == "underline":
+                        draw.line([(bbox[0], bbox[3] + 4), (bbox[2], bbox[3] + 4)], fill=(*color, 255), width=3)
+                    elif active_style == "glow":
+                        _draw_text_with_glow(draw, x, current_y, word_text, font, color)
+                    elif active_style == "block":
+                        pad = 6
+                        draw.rectangle([bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad], fill=(*color, 200))
+                        text_color_inv = (*_inverse_color(color), 255)
+                        draw.text((x, current_y), word_text, font=font, fill=text_color_inv)
+                        text_color = None
+
+                if text_color is not None:
+                    draw.text((x, current_y), word_text, font=font, fill=text_color)
+
+                x += word_width + spacing
+        
         current_y += line_height + line_spacing

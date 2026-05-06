@@ -39,10 +39,29 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        const voice = voiceSelect.value;
+        const targetLanguage = window.targetLanguage || 'en';
+        
+        // Use Urdu chunks if translation was requested
+        const textChunks = targetLanguage === 'ur' && window.urduTextChunks && window.urduTextChunks.length > 0
+            ? window.urduTextChunks
+            : window.extractedChunks;
+        
+        // Auto-select Urdu voice when Urdu is the target language
+        let voice = voiceSelect.value;
+        if (targetLanguage === 'ur' && (!voice || !voice.startsWith('ur-'))) {
+            // Try to find an Urdu voice
+            const options = voiceSelect.options;
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].value && options[i].value.startsWith('ur-')) {
+                    voice = options[i].value;
+                    voiceSelect.value = voice;
+                    break;
+                }
+            }
+        }
+        
         const speedValue = parseInt(speedRange.value, 10);
         const speed = `${speedValue >= 0 ? "+" : ""}${speedValue}%`;
-        const targetLanguage = window.targetLanguage || 'en';
 
         convertBtn.disabled = true;
         conversionStatus.classList.remove("hidden");
@@ -57,7 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    text_chunks: window.extractedChunks,
+                    text_chunks: textChunks,
                     voice,
                     speed,
                     target_language: targetLanguage,

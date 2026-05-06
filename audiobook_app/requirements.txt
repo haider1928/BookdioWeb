@@ -11,3 +11,5 @@ torch
 transformers
 groq
 python-dotenv
+python-bidi
+arabic-reshaper
